@@ -1,314 +1,357 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useLowStockReport, useDailyCashReport, useGlobalSearch } from "@/hooks/use-reports";
-import { Package, ShoppingCart, Wrench, TrendingUp, AlertTriangle, CheckCircle, DollarSign, Search as SearchIcon, Loader2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLowStockReport, useDailyCashReport } from "@/hooks/use-reports";
+import {
+  Package,
+  ShoppingCart,
+  Wrench,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle,
+  DollarSign,
+  Loader2,
+  Users,
+  Receipt,
+  CalendarIcon,
+  ArrowRight,
+  Sparkles,
+  BarChart3,
+  Clock
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 
 export default function Reportes() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
-  
+  const [selectedDate, setSelectedDate] = useState<string>("");
+
   const { data: lowStockReport, isLoading: loadingStock } = useLowStockReport();
-  const { data: cashReport, isLoading: loadingCash } = useDailyCashReport();
-  const { data: searchResults } = useGlobalSearch(searchQuery);
+  const { data: cashReport, isLoading: loadingCash } = useDailyCashReport(selectedDate || undefined);
 
   const lowStockProducts = lowStockReport?.productos || [];
-  const totalProductos = lowStockReport?.total_alertas || 0;
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'administrador';
+
+  // Formatear fecha para mostrar
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "Hoy";
+    const date = new Date(dateString + 'T12:00:00');
+    return date.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
 
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title="Reportes" 
-        description="Reportes de stock bajo y caja diaria"
+      <PageHeader
+        title="Panel de Control"
+        description={`Bienvenido, ${user?.nombre || 'Usuario'} • ${new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}`}
       />
 
-      {/* Buscador Global */}
-      <div className="card-industrial bg-white p-6 space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900 mb-1">Buscador Global</h3>
-        </div>
-        
+      {/* Acciones Rápidas - Hero Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 md:p-8">
+        <div className="absolute inset-0 bg-grid-white/5" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-primary/20 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+
         <div className="relative">
-          {!searchFocused && !searchQuery && (
-            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          )}
-          <Input 
-            placeholder=""
-            className="bg-slate-50 border-slate-200 rounded-lg h-14 text-base pl-14 focus:bg-white focus:border-primary transition-all"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-          />
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-white">Acciones Rápidas</h2>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {/* Nueva Orden */}
+            <Button
+              variant="secondary"
+              className="h-auto py-4 px-4 flex-col gap-2 bg-white/10 hover:bg-white/20 border-0 text-white backdrop-blur-sm transition-all hover:scale-105"
+              onClick={() => setLocation('/work-orders')}
+            >
+              <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                <Wrench className="w-5 h-5 text-green-400" />
+              </div>
+              <span className="text-xs font-medium">Nueva Orden</span>
+            </Button>
+
+            {/* Venta Mostrador */}
+            <Button
+              variant="secondary"
+              className="h-auto py-4 px-4 flex-col gap-2 bg-white/10 hover:bg-white/20 border-0 text-white backdrop-blur-sm transition-all hover:scale-105"
+              onClick={() => setLocation('/counter-sales')}
+            >
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                <Receipt className="w-5 h-5 text-blue-400" />
+              </div>
+              <span className="text-xs font-medium">Venta Mesón</span>
+            </Button>
+
+            {/* Ver Clientes */}
+            <Button
+              variant="secondary"
+              className="h-auto py-4 px-4 flex-col gap-2 bg-white/10 hover:bg-white/20 border-0 text-white backdrop-blur-sm transition-all hover:scale-105"
+              onClick={() => setLocation('/clients')}
+            >
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                <Users className="w-5 h-5 text-purple-400" />
+              </div>
+              <span className="text-xs font-medium">Clientes</span>
+            </Button>
+
+            {/* Ver Inventario */}
+            <Button
+              variant="secondary"
+              className="h-auto py-4 px-4 flex-col gap-2 bg-white/10 hover:bg-white/20 border-0 text-white backdrop-blur-sm transition-all hover:scale-105"
+              onClick={() => setLocation('/inventory')}
+            >
+              <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center">
+                <Package className="w-5 h-5 text-orange-400" />
+              </div>
+              <span className="text-xs font-medium">Inventario</span>
+            </Button>
+
+            {/* Registrar Compra - Solo Admin */}
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                className="h-auto py-4 px-4 flex-col gap-2 bg-white/10 hover:bg-white/20 border-0 text-white backdrop-blur-sm transition-all hover:scale-105"
+                onClick={() => setLocation('/purchases/create')}
+              >
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                  <ShoppingCart className="w-5 h-5 text-emerald-400" />
+                </div>
+                <span className="text-xs font-medium">Nueva Compra</span>
+              </Button>
+            )}
+
+            {/* Ver Compras - Solo Admin */}
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                className="h-auto py-4 px-4 flex-col gap-2 bg-white/10 hover:bg-white/20 border-0 text-white backdrop-blur-sm transition-all hover:scale-105"
+                onClick={() => setLocation('/purchases')}
+              >
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-cyan-400" />
+                </div>
+                <span className="text-xs font-medium">Historial</span>
+              </Button>
+            )}
+          </div>
         </div>
-        
-        {searchQuery.length >= 2 && searchResults && searchResults.total_resultados > 0 && (
-          <div className="space-y-4 pt-2">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <CheckCircle className="w-4 h-4 text-green-600" />
-              <span>Se encontraron <strong>{searchResults.total_resultados}</strong> resultados</span>
-            </div>
+      </div>
 
-            <div className="grid gap-4 max-h-96 overflow-y-auto pr-2">
-              {searchResults.clientes.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <SearchIcon className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <p className="font-semibold text-slate-900">Clientes ({searchResults.clientes.length})</p>
-                  </div>
-                  {searchResults.clientes.map(cliente => (
-                    <div key={cliente.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-300 transition-all cursor-pointer">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-semibold text-slate-900">{cliente.nombre}</p>
-                          <p className="text-sm text-slate-600 mt-1">RUT: {cliente.rut}</p>
-                          {cliente.telefono && (
-                            <p className="text-sm text-slate-600">Tel: {cliente.telefono}</p>
-                          )}
-                        </div>
-                        {cliente.cantidad_ordenes && cliente.cantidad_ordenes > 0 && (
-                          <Badge variant="secondary" className="text-xs">
-                            {cliente.cantidad_ordenes} {cliente.cantidad_ordenes === 1 ? 'orden' : 'órdenes'}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {searchResults.vehiculos.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                      <Package className="w-4 h-4 text-green-600" />
-                    </div>
-                    <p className="font-semibold text-slate-900">Vehículos ({searchResults.vehiculos.length})</p>
-                  </div>
-                  {searchResults.vehiculos.map(vehiculo => (
-                    <div key={vehiculo.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200 hover:bg-green-50 hover:border-green-300 transition-all cursor-pointer">
-                      <p className="font-mono font-bold text-lg text-slate-900">{vehiculo.patente}</p>
-                      <p className="text-sm text-slate-600 mt-1">
-                        {vehiculo.marca} {vehiculo.modelo}{vehiculo.anio ? ` • Año ${vehiculo.anio}` : ''}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {searchResults.ordenes_recientes.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                      <Wrench className="w-4 h-4 text-purple-600" />
-                    </div>
-                    <p className="font-semibold text-slate-900">Órdenes de Trabajo ({searchResults.ordenes_recientes.length})</p>
-                  </div>
-                  {searchResults.ordenes_recientes.map(orden => {
-                    const numeroOrden = orden.numero_orden_papel || orden.numero_orden || 0;
-                    const total = orden.total_cobrado || orden.total || 0;
-                    return (
-                      <div key={orden.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200 hover:bg-purple-50 hover:border-purple-300 transition-all cursor-pointer">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="font-semibold text-slate-900">OT #{numeroOrden}</p>
-                            <p className="text-sm text-slate-600 mt-1">{orden.cliente_nombre}</p>
-                            <p className="text-sm text-slate-600">Patente: {orden.patente}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-primary">${total.toLocaleString('es-CL')}</p>
-                            <p className="text-xs text-slate-500 mt-1">
-                              {new Date(orden.fecha).toLocaleDateString('es-CL')}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+      {/* Cards de Caja Diaria */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <DollarSign className="w-4 h-4 text-primary" />
             </div>
+            <h2 className="text-lg font-semibold text-slate-900">Resumen de Caja</h2>
           </div>
-        )}
-        
-        {searchQuery.length >= 2 && searchResults && searchResults.total_resultados === 0 && (
-          <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-            <AlertTriangle className="w-12 h-12 mb-3" />
-            <p className="text-sm font-medium">No se encontraron resultados para "{searchQuery}"</p>
-            <p className="text-xs mt-1">Intenta con otro término de búsqueda</p>
-          </div>
-        )}
 
-        {searchQuery.length === 1 && (
-          <div className="flex items-center gap-2 text-sm text-slate-500 py-2">
-            <AlertTriangle className="w-4 h-4" />
-            <span>Escribe al menos 2 caracteres para buscar</span>
+          {/* Selector de Fecha con Popover */}
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[200px] justify-start text-left font-normal h-9",
+                    !selectedDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDate ? (
+                    new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-CL', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })
+                  ) : (
+                    <span>Seleccionar fecha</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate ? new Date(selectedDate + 'T12:00:00') : undefined}
+                  onSelect={(date) => {
+                    if (date) {
+                      const formatted = date.toISOString().split('T')[0];
+                      setSelectedDate(formatted);
+                    }
+                  }}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {selectedDate && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedDate("")}
+                className="text-xs h-9"
+              >
+                Ver hoy
+              </Button>
+            )}
           </div>
-        )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Taller */}
+          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-green-50 to-green-100/50 shadow-sm hover:shadow-md transition-shadow">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-green-900">Taller</CardTitle>
+              <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                <Wrench className="h-4 w-4 text-green-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingCash ? (
+                <Loader2 className="w-6 h-6 animate-spin text-green-600" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-green-900">${(cashReport?.total_taller || 0).toLocaleString('es-CL')}</div>
+                  <div className="flex items-center gap-1 text-xs text-green-700 mt-1">
+                    <Clock className="w-3 h-3" />
+                    <span>{cashReport?.cantidad_ordenes || 0} órdenes • {formatDate(selectedDate)}</span>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Mesón */}
+          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-50 to-blue-100/50 shadow-sm hover:shadow-md transition-shadow">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-blue-900">Mesón</CardTitle>
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <ShoppingCart className="h-4 w-4 text-blue-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingCash ? (
+                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-blue-900">${(cashReport?.total_meson || 0).toLocaleString('es-CL')}</div>
+                  <div className="flex items-center gap-1 text-xs text-blue-700 mt-1">
+                    <Receipt className="w-3 h-3" />
+                    <span>{cashReport?.cantidad_ventas_meson || 0} ventas</span>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Total */}
+          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-purple-50 to-purple-100/50 shadow-sm hover:shadow-md transition-shadow">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-purple-900">Total Día</CardTitle>
+              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                <DollarSign className="h-4 w-4 text-purple-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingCash ? (
+                <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-purple-900">${(cashReport?.total_final || 0).toLocaleString('es-CL')}</div>
+                  <div className="flex items-center gap-1 text-xs text-purple-700 mt-1">
+                    <TrendingUp className="w-3 h-3" />
+                    <span>Taller + Mesón</span>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Stock Bajo */}
+          <Card className={`relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-shadow ${lowStockProducts.length > 0
+            ? 'bg-gradient-to-br from-red-50 to-red-100/50'
+            : 'bg-gradient-to-br from-slate-50 to-slate-100/50'
+            }`}>
+            <div className={`absolute top-0 right-0 w-20 h-20 rounded-full -translate-y-1/2 translate-x-1/2 ${lowStockProducts.length > 0 ? 'bg-red-500/10' : 'bg-slate-500/10'
+              }`} />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className={`text-sm font-medium ${lowStockProducts.length > 0 ? 'text-red-900' : 'text-slate-900'}`}>
+                Stock Bajo
+              </CardTitle>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${lowStockProducts.length > 0 ? 'bg-red-500/20' : 'bg-slate-500/20'
+                }`}>
+                {lowStockProducts.length > 0 ? (
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                ) : (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingStock ? (
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              ) : (
+                <>
+                  <div className={`text-2xl font-bold ${lowStockProducts.length > 0 ? 'text-red-900' : 'text-slate-900'}`}>
+                    {lowStockReport?.total_alertas || 0}
+                  </div>
+                  <div className={`flex items-center gap-1 text-xs mt-1 ${lowStockProducts.length > 0 ? 'text-red-700' : 'text-slate-600'
+                    }`}>
+                    <Package className="w-3 h-3" />
+                    <span>{lowStockProducts.length > 0 ? 'productos a reponer' : 'todo en orden'}</span>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Alertas de Stock Bajo */}
-      {loadingStock ? (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="py-4">
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">Cargando alertas de stock...</span>
-            </div>
-          </CardContent>
-        </Card>
-      ) : lowStockProducts.length > 0 ? (
+      {!loadingStock && lowStockProducts.length > 0 && (
         <Alert variant="destructive" className="border-red-200 bg-red-50">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle className="font-bold">⚠️ Alerta de Stock Bajo</AlertTitle>
           <AlertDescription>
-            <p className="mb-2">{lowStockProducts.length} producto(s) requieren reposición:</p>
+            <p className="mb-3">{lowStockProducts.length} producto(s) requieren reposición:</p>
             <div className="flex flex-wrap gap-2">
-              {lowStockProducts.slice(0, 5).map((product) => (
-                <Badge key={product.id} variant="destructive" className="font-mono">
-                  {product.sku} - {product.stock_actual}/{product.stock_minimo} u.
+              {lowStockProducts.slice(0, 6).map((product) => (
+                <Badge key={product.id} variant="destructive" className="font-mono text-xs py-1 px-2">
+                  {product.sku} • {product.nombre} ({product.stock_actual}/{product.stock_minimo})
                 </Badge>
               ))}
-              {lowStockProducts.length > 5 && (
-                <Badge variant="outline">+{lowStockProducts.length - 5} más</Badge>
+              {lowStockProducts.length > 6 && (
+                <Badge variant="outline" className="text-red-700 border-red-300">
+                  +{lowStockProducts.length - 6} más
+                </Badge>
               )}
             </div>
+            {isAdmin && (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="mt-3"
+                onClick={() => setLocation('/purchases/create')}
+              >
+                Registrar Compra
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            )}
           </AlertDescription>
         </Alert>
-      ) : null}
+      )}
 
-      {/* Cards de Caja Diaria */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-green-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Taller (Hoy)</CardTitle>
-            <Wrench className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            {loadingCash ? (
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">${(cashReport?.total_taller || 0).toLocaleString('es-CL')}</div>
-                <p className="text-xs text-muted-foreground">
-                  {cashReport?.cantidad_ordenes || 0} órdenes
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-blue-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mesón (Hoy)</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            {loadingCash ? (
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">${(cashReport?.total_meson || 0).toLocaleString('es-CL')}</div>
-                <p className="text-xs text-muted-foreground">
-                  {cashReport?.cantidad_ventas_meson || 0} ventas
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-purple-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Día</CardTitle>
-            <DollarSign className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            {loadingCash ? (
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">${(cashReport?.total_final || 0).toLocaleString('es-CL')}</div>
-                <p className="text-xs text-muted-foreground">
-                  {cashReport?.fecha ? new Date(cashReport.fecha).toLocaleDateString('es-CL') : 'Hoy'}
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-red-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Stock Bajo</CardTitle>
-            <Package className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            {loadingStock ? (
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{lowStockReport?.total_alertas || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  productos
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Acciones Rápidas */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            Acciones Rápidas
-          </CardTitle>
-          <CardDescription>Accede rápidamente a las funciones principales</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button 
-              variant="outline" 
-              className="h-auto py-4 flex-col gap-2"
-              onClick={() => setLocation('/work-orders')}
-            >
-              <Wrench className="w-6 h-6" />
-              <span className="font-semibold">Nueva Orden de Trabajo</span>
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              className="h-auto py-4 flex-col gap-2"
-              onClick={() => setLocation('/inventory')}
-            >
-              <Package className="w-6 h-6" />
-              <span className="font-semibold">Ver Inventario</span>
-            </Button>
-            
-            {user?.role === 'ADMIN' || user?.role === 'administrador' ? (
-              <Button 
-                variant="outline" 
-                className="h-auto py-4 flex-col gap-2"
-                onClick={() => setLocation('/purchases')}
-              >
-                <ShoppingCart className="w-6 h-6" />
-                <span className="font-semibold">Registrar Compra</span>
-              </Button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
