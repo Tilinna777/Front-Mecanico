@@ -1,13 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search, User, Car, Phone, FileText, Mail, MapPin, Calendar, DollarSign, Wrench, ChevronRight } from "lucide-react";
+import { Search, User, Car, Phone, FileText, Mail, MapPin, Calendar, DollarSign, Wrench, ChevronRight, X, Check, Loader2, Edit, Trash2, Save } from "lucide-react";
 import { useGlobalSearch } from "@/hooks/use-reports";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useClients, useUpdateClient, useDeleteClient } from "@/hooks/use-clients";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ClienteDetalle {
   id: string;
@@ -21,17 +35,185 @@ interface ClienteDetalle {
 
 export default function Clients() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [selectedClient, setSelectedClient] = useState<ClienteDetalle | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showDetailDrawer, setShowDetailDrawer] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedClient, setEditedClient] = useState<ClienteDetalle | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<ClienteDetalle | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   
-  // Buscador global desde el backend
-  const { data: searchResults, isLoading } = useGlobalSearch(search);
+  const { toast } = useToast();
+  
+  // Obtener todos los clientes
+  const { data: allClients = [], isLoading: isLoadingClients } = useClients();
+  
+  // Mutations
+  const updateClient = useUpdateClient();
+  const deleteClient = useDeleteClient();
+  
+  // Buscador global desde el backend (solo cuando hay búsqueda)
+  const { data: searchResults, isLoading: isSearching } = useGlobalSearch(debouncedSearch);
+  
+  // Debounce para búsqueda (400ms - dentro del rango 300-500ms)
+  useEffect(() => {
+    // Cancelar request anterior si existe
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const timer = setTimeout(() => {
+      // Solo buscar si hay al menos 2 caracteres
+      if (search.length >= 2) {
+        abortControllerRef.current = new AbortController();
+        setDebouncedSearch(search);
+      } else {
+        setDebouncedSearch("");
+      }
+    }, 400);
+    
+    return () => {
+      clearTimeout(timer);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [search]);
 
   const handleClientClick = (cliente: ClienteDetalle) => {
     setSelectedClient(cliente);
-    setShowDetailModal(true);
+    setEditedClient(cliente);
+    setIsEditing(false);
+    setShowDetailDrawer(true);
   };
+
+  // Seleccionar cliente desde el dropdown de autocompletado
+  const handleSelectFromDropdown = (cliente: ClienteDetalle) => {
+    setSelectedClient(cliente);
+    setSearch("");
+    setDebouncedSearch("");
+    setSearchFocused(false);
+  };
+
+  // Limpiar selección de cliente
+  const handleClearSelection = () => {
+    setSelectedClient(null);
+    setSearch("");
+    setDebouncedSearch("");
+  };
+
+  // Iniciar edición
+  const handleStartEdit = () => {
+    setIsEditing(true);
+    setEditedClient(selectedClient);
+  };
+
+  // Cancelar edición
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedClient(selectedClient);
+  };
+
+  // Guardar cambios
+  const handleSaveEdit = async () => {
+    if (!editedClient || !selectedClient) return;
+
+    try {
+      await updateClient.mutateAsync({
+        id: selectedClient.id,
+        data: {
+          nombre: editedClient.nombre,
+          rut: editedClient.rut,
+          telefono: editedClient.telefono,
+          email: editedClient.email,
+          direccion: editedClient.direccion,
+        },
+      });
+
+      toast({
+        title: "Cliente actualizado",
+        description: "Los cambios se han guardado exitosamente",
+      });
+
+      setSelectedClient(editedClient);
+      setIsEditing(false);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "No se pudo actualizar el cliente",
+      });
+    }
+  };
+
+  // Confirmar eliminación
+  const handleDeleteClick = (cliente: ClienteDetalle) => {
+    setClientToDelete(cliente);
+    setShowDeleteDialog(true);
+  };
+
+  // Eliminar cliente
+  const handleConfirmDelete = async () => {
+    if (!clientToDelete) return;
+
+    try {
+      await deleteClient.mutateAsync(clientToDelete.id);
+
+      toast({
+        title: "Cliente eliminado",
+        description: "El cliente ha sido eliminado exitosamente",
+      });
+
+      setShowDeleteDialog(false);
+      setClientToDelete(null);
+      
+      // Si estaba viendo el detalle del cliente eliminado, cerrar drawer
+      if (selectedClient?.id === clientToDelete.id) {
+        setShowDetailDrawer(false);
+        setSelectedClient(null);
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "No se pudo eliminar el cliente",
+      });
+    }
+  };
+
+  // Calcular órdenes por cliente desde los resultados de búsqueda
+  const getClientOrders = (clienteNombre: string) => {
+    if (!searchResults?.ordenes_recientes) return 0;
+    return searchResults.ordenes_recientes.filter(
+      orden => orden.cliente_nombre?.toLowerCase().includes(clienteNombre.toLowerCase())
+    ).length;
+  };
+  
+  // Determinar qué clientes mostrar: búsqueda global o todos
+  let clientesAMostrar = allClients;
+  
+  // Si hay un cliente seleccionado, filtrar por ese cliente
+  if (selectedClient) {
+    clientesAMostrar = allClients.filter(cliente => cliente.id === selectedClient.id);
+  }
+  // Si hay búsqueda, filtrar por nombre, RUT, email, teléfono
+  else if (search.length >= 2) {
+    const searchLower = search.toLowerCase();
+    clientesAMostrar = allClients.filter(cliente => 
+      cliente.nombre.toLowerCase().includes(searchLower) ||
+      cliente.rut.toLowerCase().includes(searchLower) ||
+      (cliente.email && cliente.email.toLowerCase().includes(searchLower)) ||
+      (cliente.telefono && cliente.telefono.toLowerCase().includes(searchLower))
+    );
+  }
+  
+  const isLoading = isLoadingClients || (search !== debouncedSearch && search.length >= 2);
+
+  // Estado para mostrar/ocultar dropdown de resultados
+  const showSearchResults = search.length >= 2 && !selectedClient && (searchFocused || debouncedSearch.length >= 2);
+  const hasSearchResults = searchResults && searchResults.clientes && searchResults.clientes.length > 0;
 
   // Filtrar órdenes del cliente seleccionado
   const ordenesDelCliente = selectedClient 
@@ -52,186 +234,319 @@ export default function Clients() {
         description="Búsqueda de clientes, vehículos y órdenes de trabajo."
       />
 
-      <div className="card-industrial p-6 bg-white space-y-4">
-        {/* Búsqueda Principal */}
+      <div className="card-industrial p-6 bg-white">
+        {/* Búsqueda Principal con Autocompletado */}
         <div className="relative">
-          {!searchFocused && !search && (
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          {/* Input de Búsqueda */}
+          {!searchFocused && !search && !selectedClient && (
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground transition-opacity duration-200 pointer-events-none z-10" />
+          )}
+          {isSearching && search.length >= 2 && (
+            <Loader2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-primary animate-spin pointer-events-none z-10" />
           )}
           <Input 
             placeholder=""
-            value={search}
+            value={selectedClient ? "" : search}
             onChange={(e) => setSearch(e.target.value)}
             onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            className="bg-slate-50 border-slate-200 rounded-lg h-12 text-base pl-14"
+            onBlur={() => {
+              // Delay para permitir clicks en resultados
+              setTimeout(() => setSearchFocused(false), 200);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSearch("");
+                setDebouncedSearch("");
+                setSearchFocused(false);
+              }
+            }}
+            disabled={!!selectedClient}
+            className={`bg-slate-50 border-slate-200 rounded-lg h-12 text-base transition-all duration-200 ${
+              searchFocused || search ? 'pl-4' : 'pl-14'
+            } ${selectedClient ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
+          {search && !selectedClient && (
+            <button
+              onClick={() => {
+                setSearch("");
+                setDebouncedSearch("");
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-10"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Dropdown de Resultados de Búsqueda (Autocompletado) */}
+          {showSearchResults && (
+            <div 
+              className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-[400px] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {isSearching && (
+                <div className="p-8 text-center">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
+                  <p className="text-sm text-muted-foreground">Buscando clientes...</p>
+                </div>
+              )}
+
+              {!isSearching && !hasSearchResults && (
+                <div className="p-8 text-center text-muted-foreground">
+                  <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm font-semibold">Sin resultados</p>
+                  <p className="text-xs mt-1">No se encontraron clientes para "{search}"</p>
+                </div>
+              )}
+
+              {!isSearching && hasSearchResults && (
+                <div className="py-2">
+                  {/* Lista de Clientes */}
+                  <div className="px-2">
+                    <h4 className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                      <User className="w-3 h-3" />
+                      Clientes encontrados ({searchResults?.clientes?.length || 0})
+                    </h4>
+                    <div className="space-y-1">
+                      {searchResults?.clientes?.map((cliente) => {
+                        const ordenesCount = getClientOrders(cliente.nombre);
+                        return (
+                          <button
+                            key={cliente.id}
+                            onClick={() => handleSelectFromDropdown(cliente)}
+                            className="w-full text-left px-3 py-3 rounded-md hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm truncate">{cliente.nombre}</p>
+                                <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                  <span className="text-xs text-muted-foreground font-mono">{cliente.rut}</span>
+                                  {cliente.telefono && (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <Phone className="w-3 h-3" />
+                                      {cliente.telefono}
+                                    </span>
+                                  )}
+                                </div>
+                                {ordenesCount > 0 && (
+                                  <p className="text-xs text-primary mt-1.5 font-medium">
+                                    {ordenesCount} {ordenesCount === 1 ? 'orden anterior' : 'órdenes anteriores'}
+                                  </p>
+                                )}
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {isLoading && (
-          <div className="text-center py-8 text-muted-foreground">
-            Buscando...
-          </div>
-        )}
-
-        {!isLoading && search && searchResults && (
-          <div className="space-y-6">
-            {/* Clientes encontrados */}
-            {searchResults.clientes && searchResults.clientes.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Clientes ({searchResults.clientes.length})
-                </h3>
-                <div className="grid gap-3">
-                  {searchResults.clientes.map((cliente) => (
-                    <div 
-                      key={cliente.id} 
-                      className="p-4 border border-slate-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
-                      onClick={() => handleClientClick(cliente)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1 flex-1">
-                          <p className="font-semibold text-foreground flex items-center gap-2">
-                            {cliente.nombre}
-                            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                          </p>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <User className="w-3 h-3" />
-                              {cliente.rut}
-                            </span>
-                            {cliente.telefono && (
-                              <span className="flex items-center gap-1">
-                                <Phone className="w-3 h-3" />
-                                {cliente.telefono}
-                              </span>
-                            )}
-                            {cliente.cantidad_ordenes && cliente.cantidad_ordenes > 0 && (
-                              <Badge variant="secondary" className="text-xs">
-                                {cliente.cantidad_ordenes} {cliente.cantidad_ordenes === 1 ? 'orden' : 'órdenes'}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+        {/* Banner de Cliente Seleccionado */}
+        {selectedClient && (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="flex-shrink-0 w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                <Check className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-green-900">Cliente seleccionado</p>
+                <p className="text-lg font-bold text-green-950 truncate">{selectedClient.nombre}</p>
+                <div className="flex items-center gap-3 mt-1 text-xs text-green-700 flex-wrap">
+                  <span className="font-mono">{selectedClient.rut}</span>
+                  {selectedClient.telefono && (
+                    <span className="flex items-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      {selectedClient.telefono}
+                    </span>
+                  )}
                 </div>
               </div>
-            )}
-
-            {/* Vehículos encontrados */}
-            {searchResults.vehiculos && searchResults.vehiculos.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                  <Car className="w-4 h-4" />
-                  Vehículos ({searchResults.vehiculos.length})
-                </h3>
-                <div className="grid gap-3">
-                  {searchResults.vehiculos.map((vehiculo, idx) => (
-                    <div 
-                      key={idx} 
-                      className="p-4 border border-slate-200 rounded-lg hover:border-primary/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <p className="font-semibold text-foreground">{vehiculo.patente}</p>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>{vehiculo.marca} {vehiculo.modelo}</span>
-                            <span className="text-xs">Año {vehiculo.anio}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Órdenes recientes */}
-            {searchResults.ordenes_recientes && searchResults.ordenes_recientes.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Órdenes de Trabajo Recientes ({searchResults.ordenes_recientes.length})
-                </h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>OT#</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Vehículo</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {searchResults.ordenes_recientes.map((orden) => (
-                      <TableRow key={orden.id}>
-                        <TableCell className="font-medium">#{orden.numero_orden}</TableCell>
-                        <TableCell>{orden.cliente_nombre}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Car className="w-4 h-4 text-muted-foreground" />
-                            {orden.patente}
-                          </div>
-                        </TableCell>
-                        <TableCell>{new Date(orden.fecha).toLocaleDateString('es-CL')}</TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={
-                              orden.estado === "FINALIZADA" ? "default" :
-                              orden.estado === "EN_PROCESO" ? "secondary" :
-                              "destructive"
-                            }
-                          >
-                            {orden.estado}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          ${orden.total?.toLocaleString('es-CL') || '0'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {/* No hay resultados */}
-            {(!searchResults.clientes || searchResults.clientes.length === 0) &&
-             (!searchResults.vehiculos || searchResults.vehiculos.length === 0) &&
-             (!searchResults.ordenes_recientes || searchResults.ordenes_recientes.length === 0) && (
-              <div className="text-center py-12">
-                <Search className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-                <p className="text-muted-foreground">No se encontraron resultados para "{search}"</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!search && !isLoading && (
-          <div className="text-center py-12">
-            <Search className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-30" />
-            <p className="text-lg font-semibold text-foreground mb-1">Buscar Clientes y Vehículos</p>
-            <p className="text-muted-foreground text-sm">
-              Ingresa un nombre, RUT, patente o información del vehículo para comenzar
-            </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleClientClick(selectedClient)}
+                className="border-green-300 hover:bg-green-100"
+              >
+                Ver detalle
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearSelection}
+                className="text-green-700 hover:text-green-900 hover:bg-green-100"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Cambiar
+              </Button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Modal de Detalle del Cliente */}
-      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Información del Cliente</DialogTitle>
-          </DialogHeader>
+      {/* Tabla de Clientes */}
+      <div className="card-industrial bg-white p-6">
 
-          {selectedClient && (
-            <div className="space-y-6">
+        {/* Tabla de Clientes */}
+        {isLoading && (
+          <div className="text-center py-12 text-muted-foreground">
+            <Search className="w-8 h-8 animate-pulse mx-auto mb-2" />
+            <p>Buscando clientes...</p>
+          </div>
+        )}
+
+        {!isLoading && clientesAMostrar.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground">
+            <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="font-semibold">{search ? 'No se encontraron resultados' : 'No hay clientes registrados'}</p>
+            <p className="text-sm">{search ? `para "${search}"` : 'Agrega tu primer cliente para comenzar'}</p>
+          </div>
+        )}
+
+        {!isLoading && clientesAMostrar.length > 0 && (
+          <div className="rounded-lg border border-slate-200 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50">
+                  <TableHead className="font-semibold">Nombre</TableHead>
+                  <TableHead className="font-semibold">RUT</TableHead>
+                  <TableHead className="font-semibold">Email</TableHead>
+                  <TableHead className="font-semibold">Teléfono</TableHead>
+                  <TableHead className="font-semibold">Dirección</TableHead>
+                  <TableHead className="font-semibold text-center">Órdenes</TableHead>
+                  <TableHead className="font-semibold text-center">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {clientesAMostrar.map((cliente) => (
+                  <TableRow 
+                    key={cliente.id}
+                    className="hover:bg-slate-50/80 cursor-pointer transition-colors"
+                    onClick={() => handleClientClick(cliente)}
+                  >
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-muted-foreground" />
+                        {cliente.nombre}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">{cliente.rut}</TableCell>
+                    <TableCell>
+                      {cliente.email ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Mail className="w-3 h-3 text-muted-foreground" />
+                          {cliente.email}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {cliente.telefono ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Phone className="w-3 h-3 text-muted-foreground" />
+                          {cliente.telefono}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {(cliente as any).direccion ? (
+                        <div className="max-w-xs truncate text-sm" title={(cliente as any).direccion}>
+                          {(cliente as any).direccion}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(cliente as any).cantidad_ordenes && (cliente as any).cantidad_ordenes > 0 ? (
+                        <Badge variant="secondary">{(cliente as any).cantidad_ordenes}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button variant="ghost" size="sm" className="gap-1">
+                        Ver detalle
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      {/* Drawer de Detalle del Cliente */}
+      <Sheet open={showDetailDrawer} onOpenChange={setShowDetailDrawer}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-2xl">Información del Cliente</SheetTitle>
+              <div className="flex items-center gap-2">
+                {!isEditing ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleStartEdit}
+                      className="gap-2"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Editar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => selectedClient && handleDeleteClick(selectedClient)}
+                      className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Eliminar
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      disabled={updateClient.isPending}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleSaveEdit}
+                      disabled={updateClient.isPending}
+                      className="gap-2"
+                    >
+                      {updateClient.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      Guardar
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </SheetHeader>
+
+          {selectedClient && editedClient && (
+            <div className="space-y-6 mt-6">
               {/* Información Personal */}
               <Card>
                 <CardHeader>
@@ -240,93 +555,98 @@ export default function Clients() {
                     Datos Personales
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Nombre Completo</p>
-                    <p className="font-semibold text-lg">{selectedClient.nombre}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">RUT</p>
-                    <p className="font-semibold">{selectedClient.rut}</p>
-                  </div>
-                  {selectedClient.telefono && (
+                <CardContent className="space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {/* Nombre */}
                     <div>
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Label htmlFor="nombre" className="text-sm text-muted-foreground">Nombre Completo</Label>
+                      {isEditing ? (
+                        <Input
+                          id="nombre"
+                          value={editedClient.nombre}
+                          onChange={(e) => setEditedClient({ ...editedClient, nombre: e.target.value })}
+                          className="mt-1"
+                        />
+                      ) : (
+                        <p className="font-semibold text-lg mt-1">{selectedClient.nombre}</p>
+                      )}
+                    </div>
+
+                    {/* RUT */}
+                    <div>
+                      <Label htmlFor="rut" className="text-sm text-muted-foreground">RUT</Label>
+                      {isEditing ? (
+                        <Input
+                          id="rut"
+                          value={editedClient.rut}
+                          onChange={(e) => setEditedClient({ ...editedClient, rut: e.target.value })}
+                          className="mt-1"
+                        />
+                      ) : (
+                        <p className="font-semibold mt-1">{selectedClient.rut}</p>
+                      )}
+                    </div>
+
+                    {/* Teléfono */}
+                    <div>
+                      <Label htmlFor="telefono" className="text-sm text-muted-foreground flex items-center gap-1">
                         <Phone className="w-3 h-3" />
                         Teléfono
-                      </p>
-                      <p className="font-semibold">{selectedClient.telefono}</p>
+                      </Label>
+                      {isEditing ? (
+                        <Input
+                          id="telefono"
+                          value={editedClient.telefono || ""}
+                          onChange={(e) => setEditedClient({ ...editedClient, telefono: e.target.value })}
+                          className="mt-1"
+                          placeholder="Opcional"
+                        />
+                      ) : (
+                        <p className="font-semibold mt-1">{selectedClient.telefono || "—"}</p>
+                      )}
                     </div>
-                  )}
-                  {selectedClient.email && (
+
+                    {/* Email */}
                     <div>
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Label htmlFor="email" className="text-sm text-muted-foreground flex items-center gap-1">
                         <Mail className="w-3 h-3" />
                         Email
-                      </p>
-                      <p className="font-semibold">{selectedClient.email}</p>
+                      </Label>
+                      {isEditing ? (
+                        <Input
+                          id="email"
+                          type="email"
+                          value={editedClient.email || ""}
+                          onChange={(e) => setEditedClient({ ...editedClient, email: e.target.value })}
+                          className="mt-1"
+                          placeholder="Opcional"
+                        />
+                      ) : (
+                        <p className="font-semibold mt-1">{selectedClient.email || "—"}</p>
+                      )}
                     </div>
-                  )}
-                  {selectedClient.direccion && (
+
+                    {/* Dirección */}
                     <div className="md:col-span-2">
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Label htmlFor="direccion" className="text-sm text-muted-foreground flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
                         Dirección
-                      </p>
-                      <p className="font-semibold">{selectedClient.direccion}</p>
+                      </Label>
+                      {isEditing ? (
+                        <Input
+                          id="direccion"
+                          value={editedClient.direccion || ""}
+                          onChange={(e) => setEditedClient({ ...editedClient, direccion: e.target.value })}
+                          className="mt-1"
+                          placeholder="Opcional"
+                        />
+                      ) : (
+                        <p className="font-semibold mt-1">{selectedClient.direccion || "—"}</p>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
-
-              {/* Estadísticas */}
-              <div className="grid md:grid-cols-3 gap-4">
-                <Card className="border-l-4 border-l-blue-500">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Total Órdenes</p>
-                        <p className="text-2xl font-bold">{ordenesDelCliente.length}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-l-4 border-l-green-500">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
-                        <DollarSign className="w-6 h-6 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Total Gastado</p>
-                        <p className="text-2xl font-bold">${totalGastado.toLocaleString('es-CL')}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-l-4 border-l-purple-500">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center">
-                        <Wrench className="w-6 h-6 text-purple-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Promedio por OT</p>
-                        <p className="text-2xl font-bold">
-                          ${ordenesDelCliente.length > 0 
-                            ? Math.round(totalGastado / ordenesDelCliente.length).toLocaleString('es-CL') 
-                            : '0'}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
 
               {/* Historial de Órdenes */}
               <Card>
@@ -338,28 +658,32 @@ export default function Clients() {
                 </CardHeader>
                 <CardContent>
                   {ordenesDelCliente.length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {ordenesDelCliente.map((orden) => {
                         const numeroOrden = orden.numero_orden_papel || orden.numero_orden || 0;
                         const total = orden.total_cobrado || orden.total || 0;
+                        const descripcion = (orden as any).descripcion_trabajo || (orden as any).detalle_trabajo || "";
                         return (
-                          <div key={orden.id} className="p-4 border rounded-lg hover:bg-slate-50 transition-colors">
-                            <div className="flex items-start justify-between mb-2">
-                              <div>
-                                <p className="font-semibold text-lg">OT #{numeroOrden}</p>
-                                <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                                  <Car className="w-4 h-4" />
-                                  {orden.patente}
-                                </p>
+                          <div key={orden.id} className="p-4 border border-slate-200 rounded-lg hover:border-primary/30 hover:shadow-sm transition-all space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="font-semibold text-lg text-primary">OT #{numeroOrden}</p>
+                                <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground flex-wrap">
+                                  <span className="flex items-center gap-1">
+                                    <Car className="w-4 h-4" />
+                                    {orden.patente}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="w-4 h-4" />
+                                    {new Date(orden.fecha).toLocaleDateString('es-CL')}
+                                  </span>
+                                </div>
                               </div>
                               <div className="text-right">
-                                <p className="font-bold text-xl text-primary">${total.toLocaleString('es-CL')}</p>
-                                <p className="text-xs text-muted-foreground flex items-center gap-1 justify-end mt-1">
-                                  <Calendar className="w-3 h-3" />
-                                  {new Date(orden.fecha).toLocaleDateString('es-CL')}
-                                </p>
+                                <p className="font-bold text-2xl text-primary">${total.toLocaleString('es-CL')}</p>
                               </div>
                             </div>
+                            
                             {orden.estado && (
                               <Badge 
                                 variant={
@@ -367,9 +691,21 @@ export default function Clients() {
                                   orden.estado === "EN_PROCESO" ? "secondary" :
                                   "outline"
                                 }
+                                className="text-xs"
                               >
                                 {orden.estado}
                               </Badge>
+                            )}
+                            
+                            {descripcion && (
+                              <div className="mt-3 pt-3 border-t border-slate-100">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                  Descripción del Trabajo
+                                </p>
+                                <p className="text-sm text-foreground leading-relaxed">
+                                  {descripcion}
+                                </p>
+                              </div>
                             )}
                           </div>
                         );
@@ -385,8 +721,43 @@ export default function Clients() {
               </Card>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
+
+      {/* Diálogo de Confirmación para Eliminar */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminará permanentemente el cliente{" "}
+              <span className="font-semibold">{clientToDelete?.nombre}</span> y toda su información.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteClient.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleteClient.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteClient.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Eliminar
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
