@@ -31,14 +31,18 @@ export interface PurchaseDetail {
 }
 
 export interface CreatePurchaseDTO {
-  proveedor_id: string;
-  numero_factura?: string;
+  proveedor_nombre: string;
+  numero_documento?: string;
+  tipo_documento: "FACTURA" | "BOLETA" | "NOTA";
   items: {
     sku: string;
     nombre: string;
-    cantidad: number;
-    precio_unitario: number;
+    marca?: string;
+    calidad?: string;
     modelos_compatibles_ids?: string[];
+    cantidad: number;
+    precio_costo: number;
+    precio_venta_sugerido?: number;
   }[];
 }
 

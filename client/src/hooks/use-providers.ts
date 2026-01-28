@@ -4,16 +4,12 @@ import { getApiUrl, getAuthHeaders } from "@/lib/api";
 export interface Provider {
   id: string;
   nombre: string;
-  rut: string;
-  direccion?: string;
   telefono?: string;
   email?: string;
 }
 
 export interface CreateProviderDTO {
   nombre: string;
-  rut: string;
-  direccion?: string;
   telefono?: string;
   email?: string;
 }

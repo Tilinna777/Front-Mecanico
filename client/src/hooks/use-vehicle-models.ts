@@ -56,7 +56,7 @@ export function useVehicleModelBrands() {
 }
 
 export function useVehicleModelsByBrand(marca: string) {
-  return useQuery<string[]>({
+  return useQuery<VehicleModel[]>({
     queryKey: ["vehicle-models", "brand", marca],
     queryFn: async () => {
       if (!marca) return [];

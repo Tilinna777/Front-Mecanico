@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { useWorkOrders, useDeleteWorkOrder, useCreateWorkOrder, type CreateWorkOrderDTO } from "@/hooks/use-work-orders";
+import { useWorkOrders, useDeleteWorkOrder, useCreateWorkOrder, useServicesCatalog, type CreateWorkOrderDTO } from "@/hooks/use-work-orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -206,33 +206,36 @@ function WorkOrderRow({ workOrder }: { workOrder: any }) {
 function CreateWorkOrderDialog() {
   const [open, setOpen] = useState(false);
   const { mutate: createWorkOrder, isPending } = useCreateWorkOrder();
+  const { data: servicesCatalog = [], isLoading: isLoadingCatalog } = useServicesCatalog();
   const { toast } = useToast();
 
   const form = useForm({
     defaultValues: {
       numero_orden_papel: 0,
+      realizado_por: "",
+      revisado_por: "",
       cliente_rut: "",
       cliente_nombre: "",
+      cliente_email: "",
       cliente_telefono: "",
       vehiculo_patente: "",
       vehiculo_marca: "",
       vehiculo_modelo: "",
-      vehiculo_anio: 2024,
       vehiculo_km: 0,
-      items: [] as any[],
     },
   });
 
-  const [services, setServices] = useState({
-    cambioPastillas: { checked: false, precio: 0, descripcion: "" },
-    cambioBalatas: { checked: false, precio: 0, descripcion: "" },
-    cambioLiquido: { checked: false, precio: 0, descripcion: "" },
-    cambioGomas: { checked: false, precio: 0, descripcion: "" },
-    rectificado: { checked: false, precio: 0, descripcion: "" },
-    sangrado: { checked: false, precio: 0, descripcion: "" },
-    cambioPiola: { checked: false, precio: 0, descripcion: "" },
-    revision: { checked: false, precio: 0, descripcion: "" },
-    otros: { checked: false, precio: 0, descripcion: "" },
+  // Estado dinámico para servicios basado en el catálogo
+  const [services, setServices] = useState<Record<string, { checked: boolean; precio: number; descripcion: string; product_sku?: string; cantidad_producto?: number }>>({
+    "Cambio Pastillas": { checked: false, precio: 0, descripcion: "" },
+    "Cambio Discos": { checked: false, precio: 0, descripcion: "" },
+    "Rectificado": { checked: false, precio: 0, descripcion: "" },
+    "Cambio Líquido Frenos": { checked: false, precio: 0, descripcion: "" },
+    "Revisión Sistema Completo": { checked: false, precio: 0, descripcion: "" },
+    "Cambio Zapatas Traseras": { checked: false, precio: 0, descripcion: "" },
+    "Purga Sistema Frenos": { checked: false, precio: 0, descripcion: "" },
+    "Revisión ABS": { checked: false, precio: 0, descripcion: "" },
+    "Otros": { checked: false, precio: 0, descripcion: "" },
   });
 
   const calcularTotal = () => {
@@ -245,30 +248,30 @@ function CreateWorkOrderDialog() {
     // Convertir los servicios seleccionados a items
     const items = Object.entries(services)
       .filter(([_, service]) => service.checked)
-      .map(([key, service]) => ({
-        servicio_nombre: key === 'cambioPastillas' ? 'Cambio Pastillas' :
-                        key === 'cambioBalatas' ? 'Cambio Balatas' :
-                        key === 'cambioLiquido' ? 'Cambio Líquido' :
-                        key === 'cambioGomas' ? 'Cambio Gomas' :
-                        key === 'rectificado' ? 'Rectificado' :
-                        key === 'sangrado' ? 'Sangrado' :
-                        key === 'cambioPiola' ? 'Cambio Piola' :
-                        key === 'revision' ? 'Revisión' :
-                        'Otros',
+      .map(([serviceName, service]) => ({
+        servicio_nombre: serviceName,
         descripcion: service.descripcion || '',
         precio: service.precio,
+        ...(service.product_sku && { product_sku: service.product_sku }),
+        ...(service.cantidad_producto && { cantidad_producto: service.cantidad_producto }),
       }));
 
     const payload: CreateWorkOrderDTO = {
       numero_orden_papel: data.numero_orden_papel,
-      cliente_rut: data.cliente_rut,
-      cliente_nombre: data.cliente_nombre,
-      cliente_telefono: data.cliente_telefono,
-      vehiculo_patente: data.vehiculo_patente,
-      vehiculo_marca: data.vehiculo_marca,
-      vehiculo_modelo: data.vehiculo_modelo,
-      vehiculo_anio: data.vehiculo_anio,
-      vehiculo_km: data.vehiculo_km,
+      realizado_por: data.realizado_por || undefined,
+      revisado_por: data.revisado_por || undefined,
+      cliente: {
+        nombre: data.cliente_nombre,
+        rut: data.cliente_rut,
+        email: data.cliente_email || undefined,
+        telefono: data.cliente_telefono || undefined,
+      },
+      vehiculo: {
+        patente: data.vehiculo_patente,
+        marca: data.vehiculo_marca,
+        modelo: data.vehiculo_modelo,
+        kilometraje: data.vehiculo_km,
+      },
       items,
     };
 
@@ -305,25 +308,53 @@ function CreateWorkOrderDialog() {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Número de Orden */}
-            <FormField
-              control={form.control}
-              name="numero_orden_papel"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Número de Orden</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number" 
-                      placeholder="1001" 
-                      {...field}
-                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Número de Orden y Responsables */}
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="numero_orden_papel"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número de Orden</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="1001" 
+                        {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="realizado_por"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Realizado Por</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Carlos González" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="revisado_por"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Revisado Por (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Pedro Supervisor" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             {/* Información del Cliente */}
             <div className="space-y-3">
@@ -358,19 +389,34 @@ function CreateWorkOrderDialog() {
                   )}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="cliente_telefono"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Teléfono</FormLabel>
-                    <FormControl>
-                      <Input placeholder="+56 9 1234 5678" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="cliente_telefono"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Teléfono</FormLabel>
+                      <FormControl>
+                        <Input placeholder="+56 9 1234 5678" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cliente_email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email (Opcional)</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="juan.perez@gmail.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
 
             {/* Información del Vehículo */}
@@ -400,10 +446,14 @@ function CreateWorkOrderDialog() {
                       <FormLabel>Kilometraje</FormLabel>
                       <FormControl>
                         <Input 
-                          type="number" 
-                          placeholder="50000" 
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="50.000" 
+                          value={field.value ? field.value.toLocaleString('es-CL') : ''}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            field.onChange(parseInt(value) || 0);
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
@@ -446,78 +496,77 @@ function CreateWorkOrderDialog() {
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
                 Servicios a Realizar
               </h3>
-              <div className="space-y-3">
-                {[
-                  { key: 'cambioPastillas', label: 'Cambio Pastillas' },
-                  { key: 'cambioBalatas', label: 'Cambio Balatas' },
-                  { key: 'cambioLiquido', label: 'Cambio Líquido' },
-                  { key: 'cambioGomas', label: 'Cambio Gomas' },
-                  { key: 'rectificado', label: 'Rectificado' },
-                  { key: 'sangrado', label: 'Sangrado' },
-                  { key: 'cambioPiola', label: 'Cambio Piola' },
-                  { key: 'revision', label: 'Revisión' },
-                  { key: 'otros', label: 'Otros' },
-                ].map(({ key, label }) => (
-                  <div key={key} className="border rounded-lg p-3 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <Checkbox
-                        checked={services[key as keyof typeof services].checked}
-                        onCheckedChange={(checked) => 
-                          setServices(prev => ({
-                            ...prev,
-                            [key]: { ...prev[key as keyof typeof prev], checked: !!checked }
-                          }))
-                        }
-                      />
-                      <label className="flex-1 cursor-pointer font-medium">
-                        {label}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">$</span>
-                        <Input
-                          type="text"
-                          placeholder="0"
-                          className="w-32 text-right"
-                          disabled={!services[key as keyof typeof services].checked}
-                          value={
-                            services[key as keyof typeof services].precio 
-                              ? services[key as keyof typeof services].precio.toLocaleString('es-CL')
-                              : ''
-                          }
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\./g, '');
-                            const numValue = parseInt(value) || 0;
+              {isLoadingCatalog && (
+                <div className="text-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto" />
+                  <p className="text-sm text-muted-foreground mt-2">Cargando servicios...</p>
+                </div>
+              )}
+              {!isLoadingCatalog && (
+                <div className="space-y-3">
+                  {servicesCatalog.map((serviceName) => (
+                    <div key={serviceName} className="border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={services[serviceName]?.checked || false}
+                          onCheckedChange={(checked) => 
                             setServices(prev => ({
                               ...prev,
-                              [key]: { ...prev[key as keyof typeof prev], precio: numValue }
+                              [serviceName]: { ...prev[serviceName], checked: !!checked, precio: prev[serviceName]?.precio || 0, descripcion: prev[serviceName]?.descripcion || '' }
                             }))
-                          }}
+                          }
                         />
+                        <label className="flex-1 cursor-pointer font-medium">
+                          {serviceName}
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">$</span>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="0"
+                            className="w-32 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            disabled={!services[serviceName]?.checked}
+                            value={
+                              services[serviceName]?.precio 
+                                ? services[serviceName].precio.toLocaleString('es-CL')
+                                : ''
+                            }
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              const numValue = parseInt(value) || 0;
+                              setServices(prev => ({
+                                ...prev,
+                                [serviceName]: { ...prev[serviceName], precio: numValue, checked: prev[serviceName]?.checked || false, descripcion: prev[serviceName]?.descripcion || '' }
+                              }))
+                            }}
+                          />
+                        </div>
                       </div>
+                      {services[serviceName]?.checked && (
+                        <Input
+                          placeholder="Descripción del servicio (opcional)..."
+                          className="text-sm"
+                          value={services[serviceName]?.descripcion || ''}
+                          onChange={(e) => 
+                            setServices(prev => ({
+                              ...prev,
+                              [serviceName]: { ...prev[serviceName], descripcion: e.target.value, checked: prev[serviceName]?.checked || false, precio: prev[serviceName]?.precio || 0 }
+                            }))
+                          }
+                        />
+                      )}
                     </div>
-                    {services[key as keyof typeof services].checked && (
-                      <Input
-                        placeholder="Descripción del servicio (opcional)..."
-                        className="text-sm"
-                        value={services[key as keyof typeof services].descripcion || ''}
-                        onChange={(e) => 
-                          setServices(prev => ({
-                            ...prev,
-                            [key]: { ...prev[key as keyof typeof prev], descripcion: e.target.value }
-                          }))
-                        }
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Total */}
-            <div className="border-t pt-4">
-              <div className="flex justify-between items-center text-lg font-bold">
-                <span>TOTAL</span>
-                <span className="text-primary">${calcularTotal().toLocaleString('es-CL')}</span>
+            <div className="bg-slate-100 border border-slate-300 rounded-lg p-5 shadow-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-bold text-slate-700 uppercase tracking-wide">Total a Cobrar</span>
+                <span className="text-3xl font-bold text-primary">${calcularTotal().toLocaleString('es-CL')}</span>
               </div>
             </div>
 

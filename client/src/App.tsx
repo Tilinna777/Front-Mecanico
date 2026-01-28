@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 import Reportes from "@/pages/Reportes";
 import Inventory from "@/pages/Inventory";
 import Purchases from "@/pages/Purchases";
+import CreatePurchase from "@/pages/CreatePurchase";
 import WorkOrders from "@/pages/WorkOrders";
 import CounterSales from "@/pages/CounterSales";
 import Login from "@/pages/Login";
@@ -79,6 +80,7 @@ function Router() {
           <Route path="/reportes" component={() => <ProtectedRoute component={Reportes} adminOnly />} />
           <Route path="/inventory" component={() => <ProtectedRoute component={Inventory} adminOnly />} />
           <Route path="/purchases" component={() => <ProtectedRoute component={Purchases} adminOnly />} />
+          <Route path="/purchases/create" component={() => <ProtectedRoute component={CreatePurchase} adminOnly />} />
           <Route path="/work-orders" component={() => <ProtectedRoute component={WorkOrders} />} />
           <Route path="/counter-sales" component={() => <ProtectedRoute component={CounterSales} />} />
           <Route path="/clients" component={() => <ProtectedRoute component={Clients} />} />

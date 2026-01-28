@@ -13,6 +13,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useProducts, useCreateProduct, useDeleteProduct, useUpdateProduct } from "@/hooks/use-products";
 import { useCategories } from "@/hooks/use-categories";
+import { VehicleModelMultiSelect } from "@/components/VehicleModelMultiSelect";
+import type { VehicleModel } from "@/hooks/use-vehicle-models";
 
 export default function Inventory() {
   const [search, setSearch] = useState("");
@@ -126,6 +128,7 @@ export default function Inventory() {
               <TableHead className="font-display font-bold text-slate-900 h-14">SKU</TableHead>
               <TableHead className="font-display font-bold text-slate-900 h-14">Nombre</TableHead>
               <TableHead className="font-display font-bold text-slate-900 h-14">Categoría</TableHead>
+              <TableHead className="font-display font-bold text-slate-900 h-14">Compatibilidad</TableHead>
               <TableHead className="font-display font-bold text-slate-900 h-14">Calidad</TableHead>
               <TableHead className="font-display font-bold text-slate-900 h-14">Marca</TableHead>
               <TableHead className="font-display font-bold text-slate-900 h-14">Stock</TableHead>
@@ -136,7 +139,7 @@ export default function Inventory() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-48 text-center">
+                <TableCell colSpan={9} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                     <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     <p>Cargando inventario...</p>
@@ -145,7 +148,7 @@ export default function Inventory() {
               </TableRow>
             ) : products?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-48 text-center">
+                <TableCell colSpan={9} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                     <PackageOpen className="w-12 h-12 text-slate-300" />
                     <p>No se encontraron productos.</p>
@@ -206,6 +209,27 @@ function ProductRow({ product }: { product: any }) {
             <span className="text-slate-400 text-xs">Sin categoría</span>
           )}
         </TableCell>
+        
+        {/* COLUMNA DE COMPATIBILIDAD */}
+        <TableCell className="max-w-[200px]">
+          {product.modelosCompatibles && product.modelosCompatibles.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              {product.modelosCompatibles.slice(0, 2).map((modelo: any) => (
+                <span key={modelo.id} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                  {modelo.marca} {modelo.modelo} ({modelo.anio})
+                </span>
+              ))}
+              {product.modelosCompatibles.length > 2 && (
+                <span className="text-[10px] text-slate-500 font-medium">
+                  +{product.modelosCompatibles.length - 2} más
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-slate-400 text-xs">Sin modelos</span>
+          )}
+        </TableCell>
+        
         <TableCell>
           {product.calidad ? (
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
@@ -287,6 +311,7 @@ function EditProductDialog({ product, open, onOpenChange }: { product: any; open
   const { toast } = useToast();
   const { data: categories = [] } = useCategories();
   const updateMutation = useUpdateProduct();
+  const [selectedModels, setSelectedModels] = useState<VehicleModel[]>(product.modelosCompatibles || []);
 
   const form = useForm({
     defaultValues: {
@@ -302,7 +327,12 @@ function EditProductDialog({ product, open, onOpenChange }: { product: any; open
   });
 
   const onSubmit = (data: any) => {
-    updateMutation.mutate({ id: product.id, ...data }, {
+    const payload = {
+      ...data,
+      modelosCompatiblesIds: selectedModels.map(m => m.id),
+    };
+    
+    updateMutation.mutate({ id: product.id, ...payload }, {
       onSuccess: () => {
         onOpenChange(false);
         toast({ 
@@ -411,18 +441,16 @@ function EditProductDialog({ product, open, onOpenChange }: { product: any; open
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="calidad"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Calidad</FormLabel>
-                    <FormControl><Input {...field} placeholder="Ej: Alta, Media" /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
+
+            {/* Campo de Compatibilidad */}
+            <FormItem>
+              <FormLabel>Compatibilidad (Modelos de Vehículos)</FormLabel>
+              <VehicleModelMultiSelect 
+                selectedModels={selectedModels}
+                onModelsChange={setSelectedModels}
+              />
+            </FormItem>
 
             {/* SECCIÓN PRECIOS Y STOCK */}
             <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
@@ -519,6 +547,7 @@ function AddProductDialog() {
   const { toast } = useToast();
   const { data: categories = [] } = useCategories();
   const createMutation = useCreateProduct();
+  const [selectedModels, setSelectedModels] = useState<VehicleModel[]>([]);
 
   const form = useForm({
     defaultValues: {
@@ -534,10 +563,16 @@ function AddProductDialog() {
   });
 
   const onSubmit = (data: any) => {
-    createMutation.mutate(data, {
+    const payload = {
+      ...data,
+      modelosCompatiblesIds: selectedModels.map(m => m.id),
+    };
+    
+    createMutation.mutate(payload, {
       onSuccess: () => {
         setOpen(false);
         form.reset();
+        setSelectedModels([]);
         toast({ 
           title: "Producto creado exitosamente", 
           description: `${data.sku} ha sido agregado al inventario`,
@@ -652,6 +687,15 @@ function AddProductDialog() {
                 )}
               />
             </div>
+
+            {/* Campo de Compatibilidad */}
+            <FormItem>
+              <FormLabel>Compatibilidad (Modelos de Vehículos)</FormLabel>
+              <VehicleModelMultiSelect 
+                selectedModels={selectedModels}
+                onModelsChange={setSelectedModels}
+              />
+            </FormItem>
 
             {/* SECCIÓN PRECIOS ACTUALIZADA */}
             <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-lg">

@@ -36,20 +36,26 @@ export interface WorkOrderDetail {
 
 export interface CreateWorkOrderDTO {
   numero_orden_papel: number;
-  cliente_rut: string;
-  cliente_nombre: string;
-  cliente_telefono?: string;
-  vehiculo_patente: string;
-  vehiculo_marca: string;
-  vehiculo_modelo: string;
-  vehiculo_anio?: number;
-  vehiculo_km?: number;
+  realizado_por?: string;
+  revisado_por?: string;
+  cliente: {
+    nombre: string;
+    rut: string;
+    email?: string;
+    telefono?: string;
+  };
+  vehiculo: {
+    patente: string;
+    marca: string;
+    modelo: string;
+    kilometraje: number;
+  };
   items: {
     servicio_nombre: string;
     descripcion?: string;
     precio: number;
     product_sku?: string;
-    product_cantidad?: number;
+    cantidad_producto?: number;
   }[];
 }
 

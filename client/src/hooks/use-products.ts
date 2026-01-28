@@ -31,7 +31,7 @@ export interface CreateProductDTO {
   stock_actual?: number;
   stock_minimo?: number;
   categoria_id?: string;
-  modelos_compatibles_ids?: string[];
+  modelosCompatiblesIds?: string[];
 }
 
 export function useProducts(search?: string) {
