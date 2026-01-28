@@ -99,19 +99,27 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: getAuthHeaders(),
-      });
+      try {
+        const response = await fetch(getApiUrl("/auth/logout"), {
+          method: "POST",
+          headers: getAuthHeaders(),
+        });
 
-      if (!response.ok) {
-        throw new Error("Error al cerrar sesión");
+        // Incluso si falla el logout en el backend, limpiar localmente
+        if (!response.ok) {
+          console.warn("Error en logout del servidor, limpiando sesión local");
+        }
+
+        return { success: true };
+      } catch (error) {
+        // Si hay error de red, igual limpiar sesión local
+        console.warn("Error de red en logout, limpiando sesión local");
+        return { success: true };
       }
-
-      return response.json();
     },
     onSuccess: () => {
       localStorage.removeItem("access_token");
+      queryClient.clear(); // Limpiar toda la cache
       queryClient.setQueryData(["user"], null);
       setLocation("/login");
     },

@@ -318,10 +318,14 @@ function CreateWorkOrderDialog() {
                     <FormLabel>Número de Orden</FormLabel>
                     <FormControl>
                       <Input 
-                        type="number" 
+                        type="text"
+                        inputMode="numeric"
                         placeholder="1001" 
-                        {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        value={field.value || ''}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          field.onChange(parseInt(value) || 0);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
