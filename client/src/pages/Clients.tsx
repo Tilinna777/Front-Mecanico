@@ -83,7 +83,6 @@ export default function Clients() {
   }, [search]);
 
   const handleClientClick = (cliente: ClienteDetalle) => {
-    setSelectedClient(cliente);
     setEditedClient(cliente);
     setIsEditing(false);
     setShowDetailDrawer(true);
@@ -113,16 +112,15 @@ export default function Clients() {
   // Cancelar edición
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditedClient(selectedClient);
   };
 
   // Guardar cambios
   const handleSaveEdit = async () => {
-    if (!editedClient || !selectedClient) return;
+    if (!editedClient) return;
 
     try {
       await updateClient.mutateAsync({
-        id: selectedClient.id,
+        id: editedClient.id,
         data: {
           nombre: editedClient.nombre,
           rut: editedClient.rut,
@@ -137,7 +135,6 @@ export default function Clients() {
         description: "Los cambios se han guardado exitosamente",
       });
 
-      setSelectedClient(editedClient);
       setIsEditing(false);
     } catch (error: any) {
       toast({
@@ -170,9 +167,9 @@ export default function Clients() {
       setClientToDelete(null);
       
       // Si estaba viendo el detalle del cliente eliminado, cerrar drawer
-      if (selectedClient?.id === clientToDelete.id) {
+      if (editedClient?.id === clientToDelete.id) {
         setShowDetailDrawer(false);
-        setSelectedClient(null);
+        setEditedClient(null);
       }
     } catch (error: any) {
       toast({
@@ -194,12 +191,8 @@ export default function Clients() {
   // Determinar qué clientes mostrar: búsqueda global o todos
   let clientesAMostrar = allClients;
   
-  // Si hay un cliente seleccionado, filtrar por ese cliente
-  if (selectedClient) {
-    clientesAMostrar = allClients.filter(cliente => cliente.id === selectedClient.id);
-  }
   // Si hay búsqueda, filtrar por nombre, RUT, email, teléfono
-  else if (search.length >= 2) {
+  if (search.length >= 2) {
     const searchLower = search.toLowerCase();
     clientesAMostrar = allClients.filter(cliente => 
       cliente.nombre.toLowerCase().includes(searchLower) ||
@@ -212,13 +205,13 @@ export default function Clients() {
   const isLoading = isLoadingClients || (search !== debouncedSearch && search.length >= 2);
 
   // Estado para mostrar/ocultar dropdown de resultados
-  const showSearchResults = search.length >= 2 && !selectedClient && (searchFocused || debouncedSearch.length >= 2);
+  const showSearchResults = search.length >= 2 && (searchFocused || debouncedSearch.length >= 2);
   const hasSearchResults = searchResults && searchResults.clientes && searchResults.clientes.length > 0;
 
   // Filtrar órdenes del cliente seleccionado
-  const ordenesDelCliente = selectedClient 
+  const ordenesDelCliente = editedClient 
     ? searchResults?.ordenes_recientes?.filter(
-        orden => orden.cliente_nombre?.toLowerCase().includes(selectedClient.nombre.toLowerCase())
+        orden => orden.cliente_nombre?.toLowerCase().includes(editedClient.nombre.toLowerCase())
       ) || []
     : [];
 
@@ -238,7 +231,7 @@ export default function Clients() {
         {/* Búsqueda Principal con Autocompletado */}
         <div className="relative">
           {/* Input de Búsqueda */}
-          {!searchFocused && !search && !selectedClient && (
+          {!searchFocused && !search && (
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground transition-opacity duration-200 pointer-events-none z-10" />
           )}
           {isSearching && search.length >= 2 && (
@@ -246,7 +239,7 @@ export default function Clients() {
           )}
           <Input 
             placeholder=""
-            value={selectedClient ? "" : search}
+            value={search}
             onChange={(e) => setSearch(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => {
@@ -260,12 +253,11 @@ export default function Clients() {
                 setSearchFocused(false);
               }
             }}
-            disabled={!!selectedClient}
             className={`bg-slate-50 border-slate-200 rounded-lg h-12 text-base transition-all duration-200 ${
               searchFocused || search ? 'pl-4' : 'pl-14'
-            } ${selectedClient ? 'opacity-50 cursor-not-allowed' : ''}`}
+            }`}
           />
-          {search && !selectedClient && (
+          {search && (
             <button
               onClick={() => {
                 setSearch("");
@@ -345,49 +337,6 @@ export default function Clients() {
             </div>
           )}
         </div>
-
-        {/* Banner de Cliente Seleccionado */}
-        {selectedClient && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="flex-shrink-0 w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                <Check className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-green-900">Cliente seleccionado</p>
-                <p className="text-lg font-bold text-green-950 truncate">{selectedClient.nombre}</p>
-                <div className="flex items-center gap-3 mt-1 text-xs text-green-700 flex-wrap">
-                  <span className="font-mono">{selectedClient.rut}</span>
-                  {selectedClient.telefono && (
-                    <span className="flex items-center gap-1">
-                      <Phone className="w-3 h-3" />
-                      {selectedClient.telefono}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleClientClick(selectedClient)}
-                className="border-green-300 hover:bg-green-100"
-              >
-                Ver detalle
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearSelection}
-                className="text-green-700 hover:text-green-900 hover:bg-green-100"
-              >
-                <X className="w-4 h-4 mr-1" />
-                Cambiar
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Tabla de Clientes */}
@@ -508,7 +457,7 @@ export default function Clients() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => selectedClient && handleDeleteClick(selectedClient)}
+                      onClick={() => editedClient && handleDeleteClick(editedClient)}
                       className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -545,7 +494,7 @@ export default function Clients() {
             </div>
           </SheetHeader>
 
-          {selectedClient && editedClient && (
+          {editedClient && (
             <div className="space-y-6 mt-6">
               {/* Información Personal */}
               <Card>
@@ -568,7 +517,7 @@ export default function Clients() {
                           className="mt-1"
                         />
                       ) : (
-                        <p className="font-semibold text-lg mt-1">{selectedClient.nombre}</p>
+                        <p className="font-semibold text-lg mt-1">{editedClient.nombre}</p>
                       )}
                     </div>
 
@@ -583,7 +532,7 @@ export default function Clients() {
                           className="mt-1"
                         />
                       ) : (
-                        <p className="font-semibold mt-1">{selectedClient.rut}</p>
+                        <p className="font-semibold mt-1">{editedClient.rut}</p>
                       )}
                     </div>
 
@@ -602,7 +551,7 @@ export default function Clients() {
                           placeholder="Opcional"
                         />
                       ) : (
-                        <p className="font-semibold mt-1">{selectedClient.telefono || "—"}</p>
+                        <p className="font-semibold mt-1">{editedClient.telefono || "—"}</p>
                       )}
                     </div>
 
@@ -622,7 +571,7 @@ export default function Clients() {
                           placeholder="Opcional"
                         />
                       ) : (
-                        <p className="font-semibold mt-1">{selectedClient.email || "—"}</p>
+                        <p className="font-semibold mt-1">{editedClient.email || "—"}</p>
                       )}
                     </div>
 
@@ -641,7 +590,7 @@ export default function Clients() {
                           placeholder="Opcional"
                         />
                       ) : (
-                        <p className="font-semibold mt-1">{selectedClient.direccion || "—"}</p>
+                        <p className="font-semibold mt-1">{editedClient.direccion || "—"}</p>
                       )}
                     </div>
                   </div>

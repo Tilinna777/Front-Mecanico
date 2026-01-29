@@ -13,7 +13,7 @@ import {
     getSortedRowModel,
     useReactTable,
 } from "@tanstack/react-table"
-import { ChevronDown, SlidersHorizontal } from "lucide-react"
+import { ChevronDown, SlidersHorizontal, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -64,6 +64,7 @@ export function DataTable<TData, TValue>({
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
     const [rowSelection, setRowSelection] = React.useState({})
     const [globalFilter, setGlobalFilter] = React.useState("")
+    const [searchFocused, setSearchFocused] = React.useState(false)
 
     const table = useReactTable({
         data,
@@ -115,15 +116,24 @@ export function DataTable<TData, TValue>({
                 <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
 
                     {/* LEFT & CENTER: Search + Custom Filters */}
-                    <div className="flex flex-1 flex-col md:flex-row gap-3 w-full lg:w-auto items-start md:items-center flex-wrap">
-                        <Input
-                            placeholder={searchPlaceholder}
-                            value={globalFilter ?? ""}
-                            onChange={(event) =>
-                                setGlobalFilter(event.target.value)
-                            }
-                            className="h-9 w-full md:w-[250px] bg-slate-50"
-                        />
+                    <div className="flex flex-1 flex-col md:flex-row gap-3 w-full lg:w-auto items-center flex-wrap">
+                        <div className="relative w-full md:w-[250px]">
+                            {!searchFocused && !globalFilter && (
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            )}
+                            <Input
+                                placeholder=""
+                                value={globalFilter ?? ""}
+                                onChange={(event) =>
+                                    setGlobalFilter(event.target.value)
+                                }
+                                onFocus={() => setSearchFocused(true)}
+                                onBlur={() => setSearchFocused(false)}
+                                className={`h-10 w-full bg-slate-50 transition-all ${
+                                    searchFocused || globalFilter ? 'pl-3' : 'pl-10'
+                                }`}
+                            />
+                        </div>
 
                         {/* CATEGORY SELECT (Built-in) */}
                         {categories.length > 0 && categoryColumn && (
@@ -131,13 +141,15 @@ export function DataTable<TData, TValue>({
                                 value={(table.getColumn(categoryColumn)?.getFilterValue() as string) ?? "all"}
                                 onValueChange={(value) => table.getColumn(categoryColumn)?.setFilterValue(value === "all" ? undefined : value)}
                             >
-                                <SelectTrigger className="h-9 w-[180px] bg-slate-50 border-dashed">
+                                <SelectTrigger className="h-10 w-[200px] bg-slate-50 border-dashed data-[state=open]:border-primary data-[state=open]:ring-1 data-[state=open]:ring-primary flex items-center">
                                     <SelectValue placeholder="Categoría" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">Todas las Categorías</SelectItem>
                                     {categories.map((cat) => (
-                                        <SelectItem key={cat.id} value={cat.nombre}>{cat.nombre}</SelectItem>
+                                        <SelectItem key={cat.id} value={cat.nombre}>
+                                            {cat.nombre}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

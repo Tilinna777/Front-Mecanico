@@ -52,9 +52,12 @@ export default function Inventory() {
   };
 
   const handleDelete = (product: any) => {
+    console.log("Intentando eliminar producto:", product);
     if (confirm(`¿Estás seguro de eliminar el producto ${product.sku}?`)) {
+      console.log("Usuario confirmó eliminación, ID:", product.id);
       deleteMutation.mutate(product.id, {
         onSuccess: () => {
+          console.log("Producto eliminado exitosamente");
           toast({
             title: "Producto eliminado",
             description: `El producto ${product.sku} ha sido eliminado.`,
@@ -62,6 +65,7 @@ export default function Inventory() {
           });
         },
         onError: (err: any) => {
+          console.error("Error al eliminar:", err);
           toast({
             title: "Error",
             description: err.message,
@@ -69,6 +73,8 @@ export default function Inventory() {
           });
         }
       });
+    } else {
+      console.log("Usuario canceló la eliminación");
     }
   };
 
@@ -91,7 +97,7 @@ export default function Inventory() {
 
       {/* STOCK FILTER */}
       <Select value={stockFilter} onValueChange={setStockFilter}>
-        <SelectTrigger className="h-9 w-[160px] bg-slate-50 border-dashed">
+        <SelectTrigger className="h-10 w-[200px] bg-slate-50 border-dashed flex items-center">
           <div className="flex items-center gap-2">
             <Filter className="w-3.5 h-3.5 text-slate-500" />
             <SelectValue placeholder="Estado Stock" />
@@ -99,8 +105,8 @@ export default function Inventory() {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos los Estados</SelectItem>
-          <SelectItem value="low" className="text-orange-600 font-medium">⬇️ Bajo Stock</SelectItem>
-          <SelectItem value="out" className="text-red-600 font-medium">🚫 Agotado</SelectItem>
+          <SelectItem value="low" className="text-orange-600 font-medium">Bajo Stock</SelectItem>
+          <SelectItem value="out" className="text-red-600 font-medium">Agotado</SelectItem>
         </SelectContent>
       </Select>
 
@@ -109,7 +115,7 @@ export default function Inventory() {
           variant="ghost"
           size="icon"
           onClick={() => setStockFilter("all")}
-          className="h-9 w-9 text-slate-400 hover:text-rose-500"
+          className="h-10 w-10 text-slate-400 hover:text-rose-500"
           title="Limpiar filtros"
         >
           <RefreshCcw className="w-3.5 h-3.5" />
@@ -171,7 +177,14 @@ function EditProductDialog({ product, open, onOpenChange, categories }: { produc
 
   const onSubmit = (data: any) => {
     const payload = {
-      ...data,
+      sku: data.sku,
+      nombre: data.nombre,
+      marca: data.marca,
+      calidad: data.calidad,
+      precio_venta: data.precio_venta,
+      stock_actual: data.stock_actual,
+      stock_minimo: data.stock_minimo,
+      categoriaId: data.categoria_id,
       modelosCompatiblesIds: selectedModels.map(m => m.id),
     };
 
@@ -317,10 +330,13 @@ function EditProductDialog({ product, open, onOpenChange, categories }: { produc
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
                     <Input
-                      type="number"
+                      type="text"
                       placeholder="0"
-                      defaultValue={Math.round(product.precio_venta / 1.19)}
-                      onChange={handleNetPriceChange}
+                      defaultValue={Math.round(product.precio_venta / 1.19).toLocaleString('es-CL')}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '');
+                        handleNetPriceChange({ target: { value } } as any);
+                      }}
                       className="bg-white pl-7"
                     />
                   </div>
@@ -336,9 +352,12 @@ function EditProductDialog({ product, open, onOpenChange, categories }: { produc
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600 font-bold">$</span>
                           <Input
-                            type="number"
-                            {...field}
-                            onChange={e => field.onChange(parseInt(e.target.value))}
+                            type="text"
+                            value={field.value ? field.value.toLocaleString('es-CL') : ""}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              field.onChange(parseInt(value) || 0);
+                            }}
                             className="bg-emerald-50/50 font-bold text-emerald-800 border-emerald-200 focus:border-emerald-500 pl-7 text-lg"
                           />
                         </div>
@@ -355,7 +374,15 @@ function EditProductDialog({ product, open, onOpenChange, categories }: { produc
                     <FormItem>
                       <FormLabel className="text-xs font-bold uppercase text-slate-500">Stock Actual</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} className="bg-white font-mono font-medium" />
+                        <Input 
+                          type="text" 
+                          value={field.value ? field.value.toLocaleString('es-CL') : ""}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            field.onChange(parseInt(value) || 0);
+                          }}
+                          className="bg-white font-mono font-medium" 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -369,7 +396,15 @@ function EditProductDialog({ product, open, onOpenChange, categories }: { produc
                     <FormItem>
                       <FormLabel className="text-xs font-bold uppercase text-slate-500">Stock Mínimo</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} className="bg-white font-mono font-medium border-amber-200 focus:border-amber-400" />
+                        <Input 
+                          type="text" 
+                          value={field.value ? field.value.toLocaleString('es-CL') : ""}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            field.onChange(parseInt(value) || 0);
+                          }}
+                          className="bg-white font-mono font-medium border-amber-200 focus:border-amber-400" 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
