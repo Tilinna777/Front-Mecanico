@@ -95,10 +95,24 @@ type ProductFormValues = z.infer<typeof productSchema>;
 
 // --- COMPONENTE PRINCIPAL ---
 
-export function AddProductDialog() {
-    const [open, setOpen] = useState(false);
+export interface AddProductDialogProps {
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    onProductCreated?: (product: any) => void; // Using any for product type temporarily to match DTO
+}
+
+export function AddProductDialog({
+    open: controlledOpen,
+    onOpenChange: setControlledOpen,
+    onProductCreated
+}: AddProductDialogProps = {}) {
+    const [internalOpen, setInternalOpen] = useState(false);
     const { toast } = useToast();
     const [selectedModels, setSelectedModels] = useState<VehicleModel[]>([]);
+
+    const isControlled = controlledOpen !== undefined;
+    const open = isControlled ? controlledOpen : internalOpen;
+    const setOpen = isControlled ? setControlledOpen : setInternalOpen;
 
     const { data: categories = [] } = useCategories();
     const createProductMutation = useCreateProduct();
@@ -129,7 +143,7 @@ export function AddProductDialog() {
             form.reset();
             setSelectedModels([]);
         }
-        setOpen(newOpen);
+        setOpen?.(newOpen);
     };
 
     const onSubmit = (data: ProductFormValues) => {
@@ -146,13 +160,16 @@ export function AddProductDialog() {
         };
 
         createProductMutation.mutate(payload as any, { // Cast to any to bypass DTO mismatch for now
-            onSuccess: () => {
+            onSuccess: (newProduct) => {
                 toast({
                     title: "Producto Creado",
                     description: "Se ha registrado el producto correctamente.",
                     className: "bg-emerald-50 text-emerald-900 border-emerald-200",
                 });
-                setOpen(false);
+                if (onProductCreated) {
+                    onProductCreated(newProduct);
+                }
+                handleOpenChange(false);
             },
             onError: (err: any) => {
                 toast({
@@ -187,12 +204,14 @@ export function AddProductDialog() {
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogTrigger asChild>
-                <Button size="sm" className="h-9 btn-pill bg-primary hover:bg-primary/90 text-white shadow-sm text-xs px-4">
-                    <Plus className="w-4 h-4 mr-1.5" />
-                    Nuevo Producto
-                </Button>
-            </DialogTrigger>
+            {!isControlled && (
+                <DialogTrigger asChild>
+                    <Button size="sm" className="h-9 btn-pill bg-primary hover:bg-primary/90 text-white shadow-sm text-xs px-4">
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        Nuevo Producto
+                    </Button>
+                </DialogTrigger>
+            )}
 
             {/* MODAL PRINCIPAL: max-w-6xl para mayor amplitud */}
             <DialogContent className="max-w-6xl h-[85vh] bg-white p-0 gap-0 border-slate-200 shadow-2xl rounded-xl flex flex-col overflow-hidden">
@@ -458,7 +477,7 @@ export function AddProductDialog() {
                                 )}
                             </div>
                             <div className="flex gap-3">
-                                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="h-10 px-6 border-slate-300 text-slate-600 hover:bg-slate-50">Cancelar</Button>
+                                <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} className="h-10 px-6 border-slate-300 text-slate-600 hover:bg-slate-50">Cancelar</Button>
                                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700 h-10 px-6 font-semibold shadow-lg shadow-blue-500/20" disabled={createProductMutation.isPending}>
                                     {createProductMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
                                     Guardar Producto
