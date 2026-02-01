@@ -396,8 +396,8 @@ export default function CreatePurchase() {
                 <Table>
                   <TableHeader className="bg-slate-50">
                     <TableRow>
-                      <TableHead className="w-[120px] font-bold text-slate-700">SKU</TableHead>
-                      <TableHead className="min-w-[250px] font-bold text-slate-700">Producto</TableHead>
+                      <TableHead className="w-[140px] font-bold text-slate-700">SKU</TableHead>
+                      <TableHead className="min-w-[200px] font-bold text-slate-700">Producto</TableHead>
                       <TableHead className="w-[150px] font-bold text-slate-700">Marca</TableHead>
                       <TableHead className="w-[140px] font-bold text-slate-700 text-center">Cant.</TableHead>
                       <TableHead className="w-[180px] font-bold text-slate-700 text-right">Costo Unit.</TableHead>
@@ -447,8 +447,9 @@ export default function CreatePurchase() {
                             <TableCell>
                               <Input
                                 {...form.register(`items.${index}.marca`)}
-                                className="h-8 text-xs bg-white uppercase"
+                                className="h-8 text-xs bg-slate-50 uppercase cursor-not-allowed"
                                 placeholder="Marca"
+                                readOnly
                               />
                             </TableCell>
                             <TableCell>
@@ -468,10 +469,7 @@ export default function CreatePurchase() {
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">$</span>
                                 <Input
                                   type="text"
-                                  {...form.register(`items.${index}.precio_costo`, {
-                                    valueAsNumber: true,
-                                    setValueAs: (v) => v === '' ? 0 : parseInt(v)
-                                  })}
+                                  value={form.watch(`items.${index}.precio_costo`) ? form.watch(`items.${index}.precio_costo`).toLocaleString('es-CL') : ""}
                                   onChange={(e) => {
                                     const val = e.target.value.replace(/\D/g, '');
                                     form.setValue(`items.${index}.precio_costo`, parseInt(val) || 0);
@@ -626,7 +624,8 @@ function CreateProviderModal({
   const form = useForm({
     defaultValues: {
       nombre: "",
-      telefono: "+56 9",
+      rut: "",
+      telefono: "",
       email: "",
     },
   });
@@ -634,7 +633,8 @@ function CreateProviderModal({
   const onSubmit = (data: any) => {
     const cleanData = {
       nombre: data.nombre,
-      ...(data.telefono && { telefono: data.telefono }),
+      ...(data.rut && { rut: data.rut.replace(/\./g, "").replace(/-/g, "").toUpperCase().trim() }),
+      ...(data.telefono && { telefono: `+56 9${data.telefono}` }),
       ...(data.email && { email: data.email }),
     };
 
@@ -684,23 +684,64 @@ function CreateProviderModal({
 
             <FormField
               control={form.control}
+              name="rut"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-semibold text-slate-700">RUT</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="Ej: 76.123.456-7"
+                      className="h-11 bg-slate-50 border-slate-200 focus:bg-white font-mono"
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9kK]/g, "").toUpperCase();
+                        if (!value) {
+                          field.onChange("");
+                          return;
+                        }
+                        const body = value.slice(0, -1);
+                        const dv = value.slice(-1);
+                        if (!body) {
+                          field.onChange(value);
+                          return;
+                        }
+                        const reversedBody = body.split("").reverse().join("");
+                        const formatted = reversedBody.match(/.{1,3}/g)?.join(".") || "";
+                        const finalBody = formatted.split("").reverse().join("");
+                        field.onChange(`${finalBody}-${dv}`);
+                      }}
+                    />
+                  </FormControl>
+                  <div className="text-xs text-slate-500 mt-1">Opcional</div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="telefono"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-sm font-semibold text-slate-700">Teléfono</FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="Ej: +56912345678"
-                      className="h-11 bg-slate-50 border-slate-200 focus:bg-white font-mono"
-                      onFocus={(e) => {
-                        if (e.target.value === '' || e.target.value === '+56 9') {
-                          field.onChange('+56 9');
-                        }
-                      }}
-                    />
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium pointer-events-none select-none">
+                        +56 9
+                      </div>
+                      <Input
+                        {...field}
+                        placeholder="12345678"
+                        className="h-11 bg-slate-50 border-slate-200 focus:bg-white font-mono pl-16"
+                        maxLength={8}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9]/g, "");
+                          field.onChange(value);
+                        }}
+                      />
+                    </div>
                   </FormControl>
-                  <div className="text-xs text-slate-500 mt-1">Opcional</div>
+                  <div className="text-xs text-slate-500 mt-1">Opcional - Solo los 8 dígitos después del 9</div>
                   <FormMessage />
                 </FormItem>
               )}

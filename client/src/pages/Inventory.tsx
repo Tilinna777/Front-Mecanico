@@ -5,17 +5,29 @@ import { useProducts, useDeleteProduct, useUpdateProduct } from "@/hooks/use-pro
 import { useCategories } from "@/hooks/use-categories";
 import { useAuth } from "@/hooks/use-auth";
 import { AddProductDialog } from "@/components/products/AddProductDialog";
-import { DataTable } from "@/components/ui/data-table";
 import { createColumns } from "@/components/inventory/columns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useForm } from "react-hook-form";
 import { VehicleModelMultiSelect } from "@/components/VehicleModelMultiSelect";
-import { Loader2, DollarSign, Filter, RefreshCcw, Search, Plus, SlidersHorizontal } from "lucide-react";
+import { Loader2, DollarSign, Filter, RefreshCcw, Search, Plus, ChevronDown } from "lucide-react";
 import type { VehicleModel } from "@/hooks/use-vehicle-models";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  SortingState,
+  ColumnFiltersState,
+  VisibilityState,
+} from "@tanstack/react-table";
 
 export default function Inventory() {
   const { data: products = [], isLoading } = useProducts();
@@ -31,6 +43,10 @@ export default function Inventory() {
 
   // Estado para controlar modal
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -101,6 +117,23 @@ export default function Inventory() {
 
   const columns = useMemo(() => createColumns(isAdmin, handleEdit, handleDelete), [isAdmin]);
 
+  const table = useReactTable({
+    data: filteredProducts,
+    columns,
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="flex h-[50vh] items-center justify-center flex-col gap-4 text-slate-400 animate-pulse">
@@ -115,7 +148,7 @@ export default function Inventory() {
       <PageHeader
         title="Inventario de Repuestos"
         description="Gestión avanzada de productos, stock y precios."
-        // CORRECCIÓN: Botón explícito + Dialogo
+        // Solo ADMIN puede crear productos
         action={isAdmin ? (
           <>
             <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
@@ -166,6 +199,35 @@ export default function Inventory() {
               </SelectContent>
             </Select>
 
+            {/* Botón Columnas */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-10 gap-2 border-dashed">
+                  <ChevronDown className="w-4 h-4" />
+                  Columnas
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {table
+                  .getAllColumns()
+                  .filter((column) => column.getCanHide())
+                  .map((column) => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        className="capitalize"
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) =>
+                          column.toggleVisibility(!!value)
+                        }
+                      >
+                        {column.id}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {(stockFilter !== "all" || categoryFilter !== "all" || searchValue !== "") && (
               <Button
                 variant="ghost"
@@ -176,18 +238,76 @@ export default function Inventory() {
                 <RefreshCcw className="w-3.5 h-3.5" />
               </Button>
             )}
-
-            {/* Botón Columnas movido aquí */}
-            <Button variant="outline" size="sm" className="h-10 border-dashed">
-              <SlidersHorizontal className="mr-2 h-4 w-4" />
-              Columnas
-            </Button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto flex flex-col">
-        <DataTable columns={columns} data={filteredProducts} isLoading={isLoading} />
+      <div className="rounded-md border bg-white">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  No hay productos.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        {/* Paginación */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
+          <div className="text-sm text-slate-600">
+            {table.getFilteredRowModel().rows.length} producto(s) encontrado(s)
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              variant="outline"
+              size="sm"
+            >
+              Anterior
+            </Button>
+            <Button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              variant="outline"
+              size="sm"
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
       </div>
 
       {editOpen && editProduct && (

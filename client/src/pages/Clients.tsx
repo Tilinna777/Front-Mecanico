@@ -9,9 +9,11 @@ import { useWorkOrders, useUpdateWorkOrder } from "@/hooks/use-work-orders";
 import { useVehicles } from "@/hooks/use-vehicles";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -37,6 +39,7 @@ export default function Clients() {
   const { data: workOrders = [] } = useWorkOrders();
   const { data: vehicles = [] } = useVehicles();
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
 
   const [searchValue, setSearchValue] = useState("");
 
@@ -122,6 +125,7 @@ export default function Clients() {
   }, [clientsWithStats, searchValue]);
 
   const handleEdit = (client: ClienteDetalle) => {
+    if (!isAdmin) return;
     setClientToEdit(client);
     setIsEditOpen(true);
   };
@@ -133,8 +137,9 @@ export default function Clients() {
 
   const columns = useMemo(() => createColumns(
     handleEdit,
-    handleViewHistory
-  ), []);
+    handleViewHistory,
+    isAdmin
+  ), [isAdmin]);
 
   const table = useReactTable({
     data: filteredClients,
@@ -160,15 +165,15 @@ export default function Clients() {
       <PageHeader
         title="Cartera de Clientes"
         description="Gestión de clientes, historial y fidelización."
-        // BOTÓN NUEVO CLIENTE RESTAURADO
-        action={
+        // Solo ADMIN puede crear/editar clientes
+        action={isAdmin ? (
           <>
             <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
               <Plus className="w-4 h-4" /> Nuevo Cliente
             </Button>
             <CreateClientDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />
           </>
-        }
+        ) : undefined}
       />
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -377,154 +382,165 @@ function ClientHistoryDialog({
           </CardContent>
         </Card>
 
-        {/* 2. LISTA DE ÓRDENES DE TRABAJO - Cada una como card principal */}
-        <div className="space-y-4 mt-4">
+        {/* 2. LISTA DE ÓRDENES DE TRABAJO - Como Accordion */}
+        <div className="mt-4">
           {workOrders.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               <p>Este cliente no tiene órdenes de trabajo registradas</p>
             </div>
           ) : (
-            workOrders
-              .sort((a, b) => new Date(b.fecha_ingreso).getTime() - new Date(a.fecha_ingreso).getTime())
-              .map((wo) => (
-                <Card key={wo.id}>
-                  <div className="flex items-start justify-between px-6 py-3 bg-slate-50 border-b border-slate-200">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base font-bold text-slate-900">OT #{wo.numero_orden_papel}</span>
-                      <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                        wo.estado === 'FINALIZADA' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
-                        wo.estado === 'EN_PROCESO' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                        'bg-red-100 text-red-700 border border-red-200'
-                      }`}>
-                        {wo.estado}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        {new Date(wo.fecha_ingreso).toLocaleDateString('es-CL', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
-                      </span>
-                    </div>
-                    <div className="text-xl font-bold text-emerald-600">
-                      ${wo.total_cobrado?.toLocaleString('es-CL') || 0}
-                    </div>
-                  </div>
+            <Accordion type="single" collapsible className="w-full space-y-3">
+              {workOrders
+                .sort((a, b) => new Date(b.fecha_ingreso).getTime() - new Date(a.fecha_ingreso).getTime())
+                .map((wo) => (
+                  <AccordionItem 
+                    key={wo.id} 
+                    value={wo.id}
+                    className="border border-slate-200 rounded-lg bg-white shadow-sm overflow-hidden"
+                  >
+                    {/* HEADER del Accordion - Siempre Visible */}
+                    <AccordionTrigger className="hover:no-underline px-6 py-4 bg-slate-50 hover:bg-slate-100 transition-colors">
+                      <div className="flex items-start justify-between w-full pr-4">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-base font-bold text-slate-900">OT #{wo.numero_orden_papel}</span>
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                            wo.estado === 'FINALIZADA' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                            wo.estado === 'EN_PROCESO' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                            'bg-red-100 text-red-700 border border-red-200'
+                          }`}>
+                            {wo.estado}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {new Date(wo.fecha_ingreso).toLocaleDateString('es-CL', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </span>
+                        </div>
+                        <div className="text-xl font-bold text-emerald-600 ml-4">
+                          ${wo.total_cobrado?.toLocaleString('es-CL') || 0}
+                        </div>
+                      </div>
+                    </AccordionTrigger>
 
-                  <CardContent className="space-y-4 pt-6">
-                    
-                    {/* CARD VEHÍCULO */}
-                    {(() => {
-                      // Los datos ya vienen enriquecidos desde ordersWithVehicleRef
-                      const patente = wo.vehiculo?.patente || wo.patente_vehiculo;
-                      const marca = wo.vehiculo?.marca;
-                      const modelo = wo.vehiculo?.modelo;
-                      const kilometraje = wo.vehiculo?.kilometraje;
+                    {/* CONTENIDO del Accordion - Desplegable */}
+                    <AccordionContent className="px-6 pb-6 pt-4">
+                      <div className="space-y-4">
+                        
+                        {/* CARD VEHÍCULO */}
+                        {(() => {
+                          const patente = wo.vehiculo?.patente || wo.patente_vehiculo;
+                          const marca = wo.vehiculo?.marca;
+                          const modelo = wo.vehiculo?.modelo;
+                          const kilometraje = wo.vehiculo?.kilometraje;
 
-                      // Validar si marca/modelo son valores reales (no fallbacks genéricos)
-                      const marcaValida = marca && marca !== "Sin Marca" && marca !== "SIN MARCA";
-                      const modeloValido = modelo && modelo !== "Sin Modelo" && modelo !== "SIN MODELO";
+                          const marcaValida = marca && marca !== "Sin Marca" && marca !== "SIN MARCA";
+                          const modeloValido = modelo && modelo !== "Sin Modelo" && modelo !== "SIN MODELO";
 
-                      return (
+                          return (
+                            <Card>
+                              <CardHeader className="pb-3">
+                                <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                  <Car className="w-4 h-4" /> Vehículo
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-1.5 text-sm">
+                                <div className="flex gap-2">
+                                  <span className="text-slate-500 min-w-[90px]">Patente:</span>
+                                  <span className="font-bold text-slate-900 font-mono">{patente}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <span className="text-slate-500 min-w-[90px]">Marca:</span>
+                                  <span className={`font-semibold uppercase ${!marcaValida ? 'text-slate-400 italic' : 'text-slate-800'}`}>
+                                    {marcaValida ? marca : 'No registrado'}
+                                  </span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <span className="text-slate-500 min-w-[90px]">Modelo:</span>
+                                  <span className={`font-semibold uppercase ${!modeloValido ? 'text-slate-400 italic' : 'text-slate-800'}`}>
+                                    {modeloValido ? modelo : 'No registrado'}
+                                  </span>
+                                </div>
+                                {kilometraje && (
+                                  <div className="flex gap-2">
+                                    <span className="text-slate-500 min-w-[90px]">Kilometraje:</span>
+                                    <span className="font-medium text-slate-800">{kilometraje.toLocaleString('es-CL')} km</span>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          );
+                        })()}
+
+                        {/* CARD TRABAJOS REALIZADOS */}
+                        {wo.detalles && wo.detalles.length > 0 && (
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <Wrench className="w-4 h-4" /> Trabajos Realizados
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-3">
+                                {wo.detalles.map((detalle: any, idx: number) => (
+                                  <div key={detalle.id || idx} className="flex justify-between items-start p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div className="flex-1">
+                                      <p className="font-semibold text-slate-900">{detalle.servicio_nombre}</p>
+                                      {detalle.descripcion && (
+                                        <p className="text-xs text-slate-600 mt-0.5">{detalle.descripcion}</p>
+                                      )}
+                                      {detalle.producto && (
+                                        <div className="text-xs text-slate-500 mt-1">
+                                          📦 {detalle.producto.nombre} (SKU: {detalle.producto.sku})
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1 ml-4">
+                                      <span className="font-bold text-emerald-600">
+                                        ${((detalle.precio || 0) * (detalle.cantidad || 1)).toLocaleString('es-CL')}
+                                      </span>
+                                      {detalle.cantidad && detalle.cantidad > 1 && (
+                                        <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                                          x{detalle.cantidad}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* INFO ADICIONAL */}
                         <Card>
                           <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                              <Car className="w-4 h-4" /> Vehículo
-                            </CardTitle>
+                            <CardTitle className="text-sm font-semibold text-slate-700">Información General</CardTitle>
                           </CardHeader>
-                          <CardContent className="space-y-1.5 text-sm">
-                            <div className="flex gap-2">
-                              <span className="text-slate-500 min-w-[90px]">Patente:</span>
-                              <span className="font-bold text-slate-900 font-mono">{patente}</span>
+                          <CardContent className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <Label className="text-slate-600">Fecha de Ingreso:</Label>
+                              <span className="font-medium">{new Date(wo.fecha_ingreso).toLocaleDateString('es-CL')}</span>
                             </div>
-                            <div className="flex gap-2">
-                              <span className="text-slate-500 min-w-[90px]">Marca:</span>
-                              <span className={`font-semibold uppercase ${!marcaValida ? 'text-slate-400 italic' : 'text-slate-800'}`}>
-                                {marcaValida ? marca : 'No registrado'}
-                              </span>
+                            <div className="flex justify-between">
+                              <Label className="text-slate-600">Realizado por:</Label>
+                              <span className="font-medium">{wo.realizado_por || 'No especificado'}</span>
                             </div>
-                            <div className="flex gap-2">
-                              <span className="text-slate-500 min-w-[90px]">Modelo:</span>
-                              <span className={`font-semibold uppercase ${!modeloValido ? 'text-slate-400 italic' : 'text-slate-800'}`}>
-                                {modeloValido ? modelo : 'No registrado'}
-                              </span>
-                            </div>
-                            {kilometraje && (
-                              <div className="flex gap-2">
-                                <span className="text-slate-500 min-w-[90px]">Kilometraje:</span>
-                                <span className="font-medium text-slate-800">{kilometraje.toLocaleString('es-CL')} km</span>
+                            {wo.revisado_por && (
+                              <div className="flex justify-between">
+                                <Label className="text-slate-600">Revisado por:</Label>
+                                <span className="font-medium">{wo.revisado_por}</span>
                               </div>
                             )}
                           </CardContent>
                         </Card>
-                      );
-                    })()}
-
-                    {/* CARD TRABAJOS REALIZADOS */}
-                    {wo.detalles && wo.detalles.length > 0 && (
-                      <Card>
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                            <Wrench className="w-4 h-4" /> Trabajos Realizados
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-3">
-                            {wo.detalles.map((detalle: any, idx: number) => (
-                              <div key={detalle.id || idx} className="flex justify-between items-start p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                <div className="flex-1">
-                                  <p className="font-semibold text-slate-900">{detalle.servicio_nombre}</p>
-                                  {detalle.descripcion && (
-                                    <p className="text-xs text-slate-600 mt-0.5">{detalle.descripcion}</p>
-                                  )}
-                                  {detalle.producto && (
-                                    <div className="text-xs text-slate-500 mt-1">
-                                      📦 {detalle.producto.nombre} (SKU: {detalle.producto.sku})
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex flex-col items-end gap-1 ml-4">
-                                  <span className="font-bold text-emerald-600">
-                                    ${((detalle.precio || 0) * (detalle.cantidad || 1)).toLocaleString('es-CL')}
-                                  </span>
-                                  {detalle.cantidad && detalle.cantidad > 1 && (
-                                    <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
-                                      x{detalle.cantidad}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* INFO ADICIONAL */}
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-semibold text-slate-700">Información General</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <Label className="text-slate-600">Fecha de Ingreso:</Label>
-                          <span className="font-medium">{new Date(wo.fecha_ingreso).toLocaleDateString('es-CL')}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <Label className="text-slate-600">Realizado por:</Label>
-                          <span className="font-medium">{wo.realizado_por || 'No especificado'}</span>
-                        </div>
-                        {wo.revisado_por && (
-                          <div className="flex justify-between">
-                            <Label className="text-slate-600">Revisado por:</Label>
-                            <span className="font-medium">{wo.revisado_por}</span>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </CardContent>
-                </Card>
-              ))
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))
+              }
+            </Accordion>
           )}
         </div>
       </DialogContent>
@@ -697,6 +713,8 @@ function EditClientDialog({
                     <Input
                       {...field}
                       placeholder="998877111"
+                      disabled
+                      className="bg-slate-50 cursor-not-allowed"
                     />
                   </FormControl>
                   <FormMessage />
@@ -784,11 +802,15 @@ function CreateClientDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 
   const form = useForm<z.infer<typeof clientSchema>>({
     resolver: zodResolver(clientSchema),
-    defaultValues: { nombre: "", rut: "", telefono: "+56 9", email: "" }
+    defaultValues: { nombre: "", rut: "", telefono: "", email: "" }
   });
 
   const onSubmit = (data: z.infer<typeof clientSchema>) => {
-    createClient(data, {
+    const dataToSend = {
+      ...data,
+      telefono: data.telefono ? `+56 9${data.telefono}` : undefined
+    };
+    createClient(dataToSend, {
       onSuccess: () => {
         toast({ title: "Cliente creado exitosamente" });
         onOpenChange(false);
@@ -844,8 +866,23 @@ function CreateClientDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 <FormItem>
                   <FormLabel>Teléfono</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium pointer-events-none select-none">
+                        +56 9
+                      </div>
+                      <Input
+                        {...field}
+                        placeholder="12345678"
+                        className="pl-16 font-mono"
+                        maxLength={8}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9]/g, "");
+                          field.onChange(value);
+                        }}
+                      />
+                    </div>
                   </FormControl>
+                  <div className="text-xs text-slate-500 mt-1">Solo los 8 dígitos después del 9</div>
                   <FormMessage />
                 </FormItem>
               )}

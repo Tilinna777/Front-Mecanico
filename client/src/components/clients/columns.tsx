@@ -19,7 +19,8 @@ export type ClienteDetalle = Client & {
 
 export const createColumns = (
   onEdit: (client: ClienteDetalle) => void,
-  onViewHistory: (client: ClienteDetalle) => void
+  onViewHistory: (client: ClienteDetalle) => void,
+  isAdmin: boolean = true
 ): ColumnDef<ClienteDetalle>[] => [
   {
     accessorKey: "nombre",
@@ -115,10 +116,12 @@ export const createColumns = (
               <Eye className="mr-2 h-4 w-4" />
               Ver Historial
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(client)}>
-              <Edit className="mr-2 h-4 w-4" />
-              Editar
-            </DropdownMenuItem>
+            {isAdmin && (
+              <DropdownMenuItem onClick={() => onEdit(client)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Editar
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       );
