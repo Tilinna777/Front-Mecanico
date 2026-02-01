@@ -135,6 +135,7 @@ export default function CounterSales() {
       }),
       columnHelper.display({
         id: 'actions',
+        header: '',
         cell: (info) => (
           <SaleDetailsDialog sale={info.row.original} />
         ),
@@ -998,8 +999,13 @@ function SaleDetailsDialog({ sale }: { sale: any }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-800 hover:bg-slate-50">
-          <Eye className="w-4 h-4" />
+        <Button 
+          variant="ghost" 
+          size="sm"
+          className="h-8 px-3 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+        >
+          <Eye className="mr-2 h-4 w-4" />
+          Ver detalle
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden bg-white shadow-2xl">
