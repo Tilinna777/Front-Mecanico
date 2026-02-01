@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { es } from "date-fns/locale";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Search, Loader2, ShoppingCart, Check, ChevronsUpDown, Eye, Trash2, Box, Calendar as CalendarIcon } from "lucide-react";
+import { Plus, Search, Loader2, ShoppingCart, Check, ChevronsUpDown, Eye, Trash2, Box, Calendar as CalendarIcon, ChevronDown, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCounterSales } from "@/hooks/use-counter-sales";
@@ -16,6 +16,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  SortingState,
+  ColumnFiltersState,
+  VisibilityState,
+  createColumnHelper,
+} from "@tanstack/react-table";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export default function CounterSales() {
   const [search, setSearch] = useState("");
@@ -26,6 +39,11 @@ export default function CounterSales() {
   // Estado elevado para controlar el modal desde la URL
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState({});
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'new') {
@@ -35,23 +53,113 @@ export default function CounterSales() {
   }, []);
 
   // Filtrado
-  let sales = allSales.filter(s => {
-    const matchesSearch = search === "" ||
-      (s.vendedor?.toLowerCase() || "").includes(search.toLowerCase());
+  const sales = useMemo(() => {
+    let filtered = allSales.filter(s => {
+      const matchesSearch = search === "" ||
+        (s.vendedor?.toLowerCase() || "").includes(search.toLowerCase());
 
-    const matchesType = typeFilter === "all" || s.tipo_movimiento === typeFilter;
+      const matchesType = typeFilter === "all" || s.tipo_movimiento === typeFilter;
 
-    // Filtro de fecha simple (YYYY-MM-DD)
-    const saleDate = new Date(s.fecha).toLocaleDateString('en-CA');
-    const matchesDate = dateFilter === "" || saleDate === dateFilter;
+      // Filtro de fecha simple (YYYY-MM-DD)
+      const saleDate = new Date(s.fecha).toLocaleDateString('en-CA');
+      const matchesDate = dateFilter === "" || saleDate === dateFilter;
 
-    return matchesSearch && matchesType && matchesDate;
-  });
+      return matchesSearch && matchesType && matchesDate;
+    });
 
-  // Ordenar por fecha descendente
-  sales = [...sales].sort((a, b) =>
-    new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    // Ordenar por fecha descendente
+    return [...filtered].sort((a, b) =>
+      new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    );
+  }, [allSales, search, typeFilter, dateFilter]);
+
+  const columnHelper = createColumnHelper<any>();
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('tipo_movimiento', {
+        header: 'Tipo',
+        cell: (info) => {
+          const tipo = info.getValue();
+          switch (tipo) {
+            case "VENTA":
+              return <Badge className="bg-green-100 text-green-700 border-green-200 shadow-none font-medium hover:bg-green-100">Venta</Badge>;
+            case "PERDIDA":
+              return <Badge className="bg-red-50 text-red-700 border-red-200 shadow-none font-medium hover:bg-red-50">Pérdida</Badge>;
+            case "USO_INTERNO":
+              return <Badge className="bg-blue-50 text-blue-700 border-blue-200 shadow-none font-medium hover:bg-blue-50">Interno</Badge>;
+            default:
+              return <Badge variant="outline">{tipo}</Badge>;
+          }
+        },
+      }),
+      columnHelper.accessor('fecha', {
+        header: 'Fecha',
+        cell: (info) => {
+          const fecha = new Date(info.getValue());
+          return (
+            <div>
+              {fecha.toLocaleDateString('es-CL')}
+              <span className="text-slate-400 text-sm ml-2">
+                {fecha.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+          );
+        },
+      }),
+      columnHelper.accessor('vendedor', {
+        header: 'Vendedor',
+        cell: (info) => <span className="font-medium text-slate-800">{info.getValue() || "---"}</span>,
+      }),
+      columnHelper.accessor('comentario', {
+        header: 'Nota',
+        cell: (info) => <span className="text-sm text-slate-500 italic truncate block max-w-[250px]">{info.getValue() || "-"}</span>,
+      }),
+      columnHelper.accessor('detalles', {
+        header: 'Items',
+        cell: (info) => <span className="text-slate-600">{info.getValue()?.length || 0}</span>,
+      }),
+      columnHelper.display({
+        id: 'monto',
+        header: () => <div className="text-right">Monto</div>,
+        cell: (info) => {
+          const sale = info.row.original;
+          const monto = sale.tipo_movimiento === "VENTA" ? sale.total_venta : sale.costo_perdida;
+          return (
+            <div className="text-right font-bold text-emerald-600">
+              ${monto?.toLocaleString('es-CL') || 0}
+            </div>
+          );
+        },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        cell: (info) => (
+          <SaleDetailsDialog sale={info.row.original} />
+        ),
+      }),
+    ],
+    []
   );
+
+  const table = useReactTable({
+    data: sales,
+    columns,
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+      rowSelection,
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -144,6 +252,35 @@ export default function CounterSales() {
                 <Trash2 className="w-4 h-4" />
               </Button>
             )}
+
+            {/* Botón Columnas */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-11 gap-2 border-dashed">
+                  <ChevronDown className="w-4 h-4" />
+                  Columnas
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {table
+                  .getAllColumns()
+                  .filter((column) => column.getCanHide())
+                  .map((column) => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        className="capitalize"
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) =>
+                          column.toggleVisibility(!!value)
+                        }
+                      >
+                        {column.id}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -151,45 +288,78 @@ export default function CounterSales() {
       <div className="card-industrial bg-white overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="hover:bg-transparent border-b border-slate-200 bg-slate-50/50">
-              <TableHead className="font-bold text-slate-700 h-14 text-base w-[140px]">Tipo</TableHead>
-              <TableHead className="font-bold text-slate-700 h-14 text-base w-[180px]">Fecha</TableHead>
-
-              {/* Columnas separadas */}
-              <TableHead className="font-bold text-slate-700 h-14 text-base">Vendedor</TableHead>
-              <TableHead className="font-bold text-slate-700 h-14 text-base">Nota</TableHead>
-
-              <TableHead className="font-bold text-slate-700 h-14 text-base text-center w-[100px]">Items</TableHead>
-              <TableHead className="font-bold text-slate-700 h-14 text-base text-right w-[150px]">Monto</TableHead>
-              <TableHead className="w-[70px] h-14"></TableHead>
-            </TableRow>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id} className="hover:bg-transparent border-b border-slate-200 bg-slate-50/50">
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id} className="font-bold text-slate-700 h-14 text-base">
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-48 text-center">
+                <TableCell colSpan={table.getAllColumns().length} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                     <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     <p>Cargando movimientos...</p>
                   </div>
                 </TableCell>
               </TableRow>
-            ) : sales.length === 0 ? (
+            ) : table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id} className="hover:bg-slate-50/60 border-b border-slate-100 transition-colors">
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} className="py-4">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-48 text-center">
+                <TableCell colSpan={table.getAllColumns().length} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                     <ShoppingCart className="w-12 h-12 text-slate-300" />
                     <p>No se encontraron movimientos{dateFilter && " en esta fecha"}.</p>
                   </div>
                 </TableCell>
               </TableRow>
-            ) : (
-              sales.map((sale) => (
-                <SaleRow key={sale.id} sale={sale} />
-              ))
             )}
           </TableBody>
         </Table>
+
+        {/* PAGINACIÓN */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
+          <div className="text-sm text-slate-600">
+            {table.getFilteredRowModel().rows.length} movimiento(s) encontrado(s)
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              variant="outline"
+              size="sm"
+            >
+              Anterior
+            </Button>
+            <Button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              variant="outline"
+              size="sm"
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -260,9 +430,18 @@ function ProductSelector({
   error?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const { data: products = [] } = useProducts();
+  const [stockFilter, setStockFilter] = useState<"all" | "in-stock" | "low" | "out">("all");
+  const { data: allProducts = [] } = useProducts();
 
-  const selectedProduct = products.find(p => p.sku === value);
+  // Filtrar productos por stock
+  const products = allProducts.filter(product => {
+    if (stockFilter === "in-stock") return product.stock_actual > product.stock_minimo;
+    if (stockFilter === "low") return product.stock_actual > 0 && product.stock_actual <= product.stock_minimo;
+    if (stockFilter === "out") return product.stock_actual === 0;
+    return true; // "all"
+  });
+
+  const selectedProduct = allProducts.find(p => p.sku === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -295,6 +474,25 @@ function ProductSelector({
       <PopoverContent className="w-[500px] p-0 shadow-xl border-slate-100" align="start">
         <Command>
           <CommandInput placeholder="Teclea para buscar..." className="h-11" />
+          
+          {/* Filtro de Stock */}
+          <div className="px-2 py-2 border-b border-slate-100">
+            <Select value={stockFilter} onValueChange={(v: any) => setStockFilter(v)}>
+              <SelectTrigger className="h-9 w-full bg-slate-50 border-slate-200">
+                <div className="flex items-center gap-2 w-full">
+                  <Filter className="w-3.5 h-3.5 text-slate-500" />
+                  <SelectValue placeholder="Filtrar por stock" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los productos</SelectItem>
+                <SelectItem value="in-stock" className="text-emerald-600 font-medium">Con Stock Normal</SelectItem>
+                <SelectItem value="low" className="text-orange-600 font-medium">⚠️ Bajo Stock</SelectItem>
+                <SelectItem value="out" className="text-red-600 font-medium">❌ Agotado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <CommandList className="max-h-[300px]">
             <CommandEmpty className="py-6 text-center text-sm text-slate-500">
               No se encontraron productos.

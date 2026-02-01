@@ -11,6 +11,7 @@ import {
 import { useVehicles } from "@/hooks/use-vehicles";
 import { useProducts } from "@/hooks/use-products";
 import { useCategories } from "@/hooks/use-categories";
+import { ProductSearchDialog } from "@/components/products/ProductSearchDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -34,10 +35,15 @@ import {
   useReactTable,
   getCoreRowModel,
   getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
   flexRender,
   SortingState,
+  ColumnFiltersState,
+  VisibilityState,
 } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export default function WorkOrders() {
   const [search, setSearch] = useState("");
@@ -50,6 +56,9 @@ export default function WorkOrders() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState({});
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -107,9 +116,19 @@ export default function WorkOrders() {
     data: filteredOrders,
     columns,
     onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    state: { sorting },
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+      rowSelection,
+    },
   });
 
   return (
@@ -149,6 +168,35 @@ export default function WorkOrders() {
             <Button variant="ghost" size="icon" onClick={() => { setSearch(""); setStatusFilter("all"); }} className="h-10 w-10 text-slate-400 hover:text-rose-500">
               <RefreshCcw className="w-3.5 h-3.5" />
             </Button>
+
+            {/* Botón Columnas */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-10 gap-2 border-dashed">
+                  <ChevronDown className="w-4 h-4" />
+                  Columnas
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {table
+                  .getAllColumns()
+                  .filter((column) => column.getCanHide())
+                  .map((column) => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        className="capitalize"
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) =>
+                          column.toggleVisibility(!!value)
+                        }
+                      >
+                        {column.id}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -182,9 +230,32 @@ export default function WorkOrders() {
             )}
           </TableBody>
         </Table>
-      </div>
 
-      <CreateWorkOrderDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />
+        {/* PAGINACIÓN */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
+          <div className="text-sm text-slate-600">
+            {table.getFilteredRowModel().rows.length} orden(es) encontrada(s)
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              variant="outline"
+              size="sm"
+            >
+              Anterior
+            </Button>
+            <Button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              variant="outline"
+              size="sm"
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Sheet de Detalles de Orden */}
       <Sheet open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
@@ -517,7 +588,11 @@ function CreateWorkOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild><Button className="gap-2"><Plus className="w-4 h-4" /> Nueva Orden</Button></DialogTrigger>
+      <DialogTrigger asChild>
+        <Button className="gap-2">
+          <Plus className="w-4 h-4" /> Nueva Orden
+        </Button>
+      </DialogTrigger>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-amber-50 border-slate-300 shadow-xl">
         <DialogHeader><DialogTitle>Crear Orden de Trabajo</DialogTitle></DialogHeader>
         <Form {...form}>
@@ -789,7 +864,7 @@ function CreateWorkOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         </Form>
       </DialogContent>
       
-      <ProductSelectorModal
+      <ProductSearchDialog
         open={productModalOpen}
         onClose={() => setProductModalOpen(false)}
         onSelect={(product) => {
@@ -815,133 +890,11 @@ function CreateWorkOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             });
           }
         }}
+        title="🔍 Seleccionar Repuesto"
+        showOutOfStock={false}
       />
     </Dialog>
   );
 }
 
-// Componente: Selector de Productos con Filtros por Categoría
-function ProductSelectorModal({ 
-  open, 
-  onClose, 
-  onSelect 
-}: { 
-  open: boolean; 
-  onClose: () => void; 
-  onSelect: (product: any) => void;
-}) {
-  const { data: categories = [] } = useCategories();
-  const { data: allProducts = [] } = useProducts();
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-
-  console.log("📂 Categorías cargadas:", categories);
-  console.log("📦 Total productos:", allProducts.length);
-
-  const filteredProducts = useMemo(() => {
-    let products = allProducts.filter((p: any) => p.stock_actual > 0);
-    
-    if (selectedCategory) {
-      products = products.filter((p: any) => p.categoria?.id === selectedCategory);
-    }
-    
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      products = products.filter((p: any) => 
-        p.nombre.toLowerCase().includes(query) || 
-        p.sku.toLowerCase().includes(query) ||
-        (p.marca && p.marca.toLowerCase().includes(query))
-      );
-    }
-    
-    return products;
-  }, [allProducts, selectedCategory, searchQuery]);
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] bg-amber-50">
-        <DialogHeader>
-          <DialogTitle className="text-slate-800 font-bold">🔍 Seleccionar Repuesto</DialogTitle>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <Input
-              placeholder="Buscar por nombre, SKU o marca..."
-              className="pl-10 bg-white border-blue-300 focus:border-blue-400"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          <div className="flex gap-3 items-center">
-            <Select value={selectedCategory || "all"} onValueChange={(v) => setSelectedCategory(v === "all" ? null : v)}>
-              <SelectTrigger className="h-10 w-full md:w-[250px] bg-blue-50 border-blue-300 border-dashed flex items-center hover:bg-blue-100 transition-colors">
-                <SelectValue placeholder="Todas las Categorías" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  Todas las Categorías ({allProducts.filter((p: any) => p.stock_actual > 0).length})
-                </SelectItem>
-                {categories.length === 0 ? (
-                  <SelectItem value="empty" disabled>
-                    No hay categorías creadas
-                  </SelectItem>
-                ) : (
-                  categories.map((cat: any) => {
-                    const count = allProducts.filter((p: any) => p.stock_actual > 0 && p.categoria?.id === cat.id).length;
-                    return (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.nombre} ({count})
-                      </SelectItem>
-                    );
-                  })
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="max-h-[400px] overflow-y-auto space-y-2 p-2 bg-white rounded-lg border border-slate-200">
-            {filteredProducts.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
-                <Package className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                <p>No hay productos disponibles</p>
-              </div>
-            ) : (
-              filteredProducts.map((product: any) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => {
-                    onSelect(product);
-                    onClose();
-                  }}
-                  className="w-full p-3 text-left border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-all bg-white"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">{product.nombre}</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        SKU: {product.sku} • Stock: {product.stock_actual}
-                        {product.marca && ` • ${product.marca}`}
-                      </p>
-                      {product.categoria && (
-                        <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
-                          {product.categoria.nombre}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-right ml-4">
-                      <p className="font-bold text-emerald-600">${product.precio_venta.toLocaleString('es-CL')}</p>
-                    </div>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+// Este componente ya no es necesario, ahora usamos ProductSearchDialog

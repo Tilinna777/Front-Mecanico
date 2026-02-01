@@ -1,7 +1,6 @@
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,6 +8,7 @@ import { useCreatePurchase, type CreatePurchaseDTO } from "@/hooks/use-purchases
 import { useProviders, useCreateProvider } from "@/hooks/use-providers";
 import { useProducts } from "@/hooks/use-products";
 import { AddProductDialog } from "@/components/products/AddProductDialog";
+import { ProductSearchDialog } from "@/components/products/ProductSearchDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -17,7 +17,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { Check, ChevronsUpDown, Loader2, Trash2, Search, Plus, ArrowLeft, Package, User, FileText, Calendar, Building2 } from "lucide-react";
+import { ChevronsUpDown, Loader2, Trash2, Search, Plus, ArrowLeft, Package, Building2, Check, FileText } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function CreatePurchase() {
@@ -28,8 +28,6 @@ export default function CreatePurchase() {
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [selectedProviderName, setSelectedProviderName] = useState<string>("");
   const [productSearchOpen, setProductSearchOpen] = useState(false);
-  const [productSearchValue, setProductSearchValue] = useState("");
-  const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null);
 
   // QUICK ADD PRODUCT STATES
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
@@ -62,13 +60,6 @@ export default function CreatePurchase() {
     p.nombre.toLowerCase().includes(searchProvider.toLowerCase()) ||
     (p.telefono?.toLowerCase() || "").includes(searchProvider.toLowerCase()) ||
     (p.email?.toLowerCase() || "").includes(searchProvider.toLowerCase())
-  );
-
-  // Filtrar productos por búsqueda
-  const filteredProducts = products.filter(p =>
-    p.sku.toLowerCase().includes(productSearchValue.toLowerCase()) ||
-    p.nombre.toLowerCase().includes(productSearchValue.toLowerCase()) ||
-    (p.marca?.toLowerCase() || "").includes(productSearchValue.toLowerCase())
   );
 
   // Calcular totales automáticamente
@@ -138,16 +129,21 @@ export default function CreatePurchase() {
   };
 
   const handleAddProductFromSearch = (product: any, index?: number) => {
-    // Si viene un índice, actualizamos esa fila
+    // Si viene un índice, actualizamos esa fila específica
     if (index !== undefined) {
       form.setValue(`items.${index}.sku`, product.sku);
       form.setValue(`items.${index}.nombre`, product.nombre);
       form.setValue(`items.${index}.marca`, product.marca || "");
-      form.setValue(`items.${index}.precio_costo`, Math.round(product.precio_venta / 1.19)); // Sugerimos precio neto basado en venta
+      form.setValue(`items.${index}.precio_costo`, Math.round(product.precio_venta / 1.19));
+      toast({
+        title: "Producto actualizado",
+        description: `${product.nombre} en línea ${index + 1}`,
+        className: "bg-emerald-50 text-emerald-900 border-emerald-200"
+      });
       return;
     }
 
-    // Si no, agregamos nueva fila (comportamiento anterior)
+    // Si no viene índice, agregamos nueva fila
     const newItem = {
       sku: product.sku,
       nombre: product.nombre,
@@ -158,8 +154,6 @@ export default function CreatePurchase() {
     };
 
     append(newItem);
-    setProductSearchOpen(false);
-    setProductSearchValue("");
     toast({
       title: "Producto agregado",
       description: `${product.nombre}`,
@@ -382,60 +376,18 @@ export default function CreatePurchase() {
                     Crear Nuevo
                   </Button>
 
-                  {/* Botón 2: Buscador (Popover) */}
-                  <Popover open={productSearchOpen} onOpenChange={setProductSearchOpen}>
-                    <PopoverTrigger asChild>
-                      <Button type="button" size="sm" className="w-full md:w-auto justify-between bg-slate-800 text-white hover:bg-slate-700">
-                        <span className="flex items-center gap-2">
-                          <Search className="w-4 h-4" />
-                          Buscar y Agregar...
-                        </span>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0" align="end">
-                      <Command>
-                        <CommandInput
-                          placeholder="Buscar por nombre o SKU..."
-                          value={productSearchValue}
-                          onValueChange={setProductSearchValue}
-                        />
-                        <CommandList>
-                          <CommandEmpty className="py-4 text-center text-sm text-slate-500">
-                            No encontrado.
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => {
-                                setProductSearchOpen(false);
-                                setCreatingProductForIndex(null);
-                                setIsAddProductOpen(true);
-                              }}
-                              className="text-blue-600 hover:underline p-0 h-auto"
-                            >
-                              + Crear "{productSearchValue}"
-                            </Button>
-                          </CommandEmpty>
-                          <CommandGroup heading="Resultados">
-                            {filteredProducts.slice(0, 10).map((product) => (
-                              <CommandItem
-                                key={product.id}
-                                onSelect={() => handleAddProductFromSearch(product)}
-                                className="cursor-pointer data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
-                              >
-                                <div className="flex items-center justify-between w-full">
-                                  <div>
-                                    <p className="font-medium">{product.nombre}</p>
-                                    <p className="text-xs text-slate-500">SKU: {product.sku} • Stock: {product.stock_actual}</p>
-                                  </div>
-                                  <Plus className="w-4 h-4 text-blue-500" />
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  {/* Botón 2: Buscar y Agregar (Dialog) */}
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setProductSearchOpen(true)}
+                    className="w-full md:w-auto justify-between bg-slate-800 text-white hover:bg-slate-700"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Search className="w-4 h-4" />
+                      Buscar y Agregar...
+                    </span>
+                  </Button>
                 </div>
               </div>
 
@@ -481,23 +433,21 @@ export default function CreatePurchase() {
                                 {...form.register(`items.${index}.sku`)}
                                 className="h-8 text-xs font-mono bg-white uppercase"
                                 placeholder="SKU"
+                                readOnly
                               />
                             </TableCell>
                             <TableCell>
-                              <ProductCombobox
-                                value={form.watch(`items.${index}.nombre`)}
-                                products={products}
-                                onSelect={(product) => handleAddProductFromSearch(product, index)}
-                                onCreateNew={() => {
-                                  setCreatingProductForIndex(index);
-                                  setIsAddProductOpen(true);
-                                }}
+                              <Input
+                                value={form.watch(`items.${index}.nombre`) || ""}
+                                readOnly
+                                className="h-8 text-xs bg-slate-50 cursor-not-allowed"
+                                placeholder="Usar buscador arriba"
                               />
                             </TableCell>
                             <TableCell>
                               <Input
                                 {...form.register(`items.${index}.marca`)}
-                                className="h-8 text-xs bg-white"
+                                className="h-8 text-xs bg-white uppercase"
                                 placeholder="Marca"
                               />
                             </TableCell>
@@ -639,6 +589,16 @@ export default function CreatePurchase() {
             setSearchProvider("");
           }}
         />
+        
+        {/* Dialog de búsqueda de productos mejorado */}
+        <ProductSearchDialog
+          open={productSearchOpen}
+          onClose={() => setProductSearchOpen(false)}
+          onSelect={handleAddProductFromSearch}
+          title="🔍 Buscar Productos para Comprar"
+          showOutOfStock={true}
+        />
+        
         <AddProductDialog
           open={isAddProductOpen}
           onOpenChange={setIsAddProductOpen}
@@ -650,96 +610,7 @@ export default function CreatePurchase() {
   );
 }
 
-// --- SUB-COMPONENT: Product Combobox for Table Rows ---
-function ProductCombobox({
-  value,
-  products,
-  onSelect,
-  onCreateNew
-}: {
-  value: string,
-  products: any[],
-  onSelect: (p: any) => void,
-  onCreateNew: () => void
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-
-  // Filter locally to avoid heavy rerenders if generic
-  const filtered = products.filter(p =>
-    p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-    p.sku.toLowerCase().includes(search.toLowerCase())
-  ).slice(0, 10); // Limit results
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          role="combobox"
-          className={cn(
-            "h-8 w-full justify-start text-left font-normal px-2 bg-white border border-slate-200",
-            !value && "text-slate-400"
-          )}
-        >
-          {value || "Buscar producto..."}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
-        <Command>
-          <CommandInput
-            placeholder="Buscar nombre o SKU..."
-            value={search}
-            onValueChange={setSearch}
-          />
-          <CommandList>
-            <CommandEmpty className="py-3 text-center">
-              <p className="text-xs text-slate-500 mb-2">No encontrado.</p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100"
-                onClick={() => {
-                  setOpen(false);
-                  onCreateNew();
-                }}
-              >
-                <Plus className="w-3 h-3 mr-1" />
-                Crear Nuevo
-              </Button>
-            </CommandEmpty>
-            <CommandGroup>
-              {filtered.map(product => (
-                <CommandItem
-                  key={product.id}
-                  onSelect={() => {
-                    onSelect(product);
-                    setOpen(false);
-                  }}
-                  className="text-sm cursor-pointer"
-                >
-                  <div className="flex flex-col">
-                    <span className="font-semibold">{product.nombre}</span>
-                    <span className="text-[10px] text-slate-400">{product.sku}</span>
-                  </div>
-                  <Check
-                    className={cn(
-                      "ml-auto h-4 w-4",
-                      value === product.nombre ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// Modal minimalista para crear proveedor
+// --- SUB-COMPONENT: CreateProviderModal ---
 function CreateProviderModal({
   open,
   onOpenChange,
