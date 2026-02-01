@@ -107,16 +107,24 @@ export default function CreatePurchase() {
       proveedor_nombre: selectedProviderName,
       numero_documento: data.numero_documento?.trim() || undefined,
       tipo_documento: data.tipo_documento || "FACTURA",
-      items: data.items.map((item: any) => ({
-        sku: item.sku?.trim() || "",
-        nombre: item.nombre?.trim() || "",
-        marca: item.marca?.trim() || undefined,
-        calidad: item.calidad?.trim() || undefined,
-        cantidad: parseInt(item.cantidad) || 1,
-        precio_costo: parseInt(item.precio_costo) || 0,
-        precio_venta_sugerido: 0,
-        modelos_compatibles_ids: undefined,
-      })),
+      items: data.items.map((item: any) => {
+        let precio = parseInt(item.precio_costo) || 0;
+        // Si no incluye IVA, dividimos entre 1.19 para que cuando el backend
+        // calcule el total, quede sin el IVA extra (monto_iva quedará en 0)
+        if (!includeIva && precio > 0) {
+          precio = Math.round(precio / 1.19);
+        }
+        return {
+          sku: item.sku?.trim() || "",
+          nombre: item.nombre?.trim() || "",
+          marca: item.marca?.trim() || undefined,
+          calidad: item.calidad?.trim() || undefined,
+          cantidad: parseInt(item.cantidad) || 1,
+          precio_costo: precio,
+          precio_venta_sugerido: 0,
+          modelos_compatibles_ids: undefined,
+        };
+      }),
     };
 
     createPurchase(payload, {
@@ -486,17 +494,15 @@ export default function CreatePurchase() {
                               />
                             </TableCell>
                             <TableCell>
-                              <TableCell>
-                                <ProductCombobox
-                                  value={form.watch(`items.${index}.nombre`)}
-                                  products={products}
-                                  onSelect={(product) => handleAddProductFromSearch(product, index)}
-                                  onCreateNew={() => {
-                                    setCreatingProductForIndex(index);
-                                    setIsAddProductOpen(true);
-                                  }}
-                                />
-                              </TableCell>
+                              <ProductCombobox
+                                value={form.watch(`items.${index}.nombre`)}
+                                products={products}
+                                onSelect={(product) => handleAddProductFromSearch(product, index)}
+                                onCreateNew={() => {
+                                  setCreatingProductForIndex(index);
+                                  setIsAddProductOpen(true);
+                                }}
+                              />
                             </TableCell>
                             <TableCell>
                               <Input
