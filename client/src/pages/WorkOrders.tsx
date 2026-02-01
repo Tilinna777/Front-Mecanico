@@ -565,6 +565,17 @@ function CreateWorkOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         });
         onOpenChange(false);
         form.reset();
+        
+        // Limpiar servicios marcados
+        const cleanServices: any = {};
+        servicesCatalog.forEach(s => { 
+          cleanServices[s] = { checked: false, precio: 0, descripcion: "" }; 
+        });
+        setServices(cleanServices);
+        
+        // Limpiar productos seleccionados
+        setSelectedProducts([]);
+        
         queryClient.invalidateQueries({ queryKey: ["/work-orders"] });
       },
       onError: (err: any) => {
