@@ -10,7 +10,7 @@ import { Badge } from "./ui/badge";
 
 // Links con roles permitidos
 const allLinks = [
-  { href: "/reportes", label: "Reportes", icon: LayoutDashboard, roles: ["ADMIN", "WORKER"] },
+  { href: "/reportes", label: "Reportes", icon: LayoutDashboard, roles: ["ADMIN"] },
   { href: "/inventory", label: "Inventario", icon: Package, roles: ["ADMIN", "WORKER"] },
   { href: "/purchases", label: "Proveedores", icon: ShoppingCart, roles: ["ADMIN"] },
   { href: "/work-orders", label: "Órdenes de Trabajo", icon: ClipboardList, roles: ["ADMIN", "WORKER"] },

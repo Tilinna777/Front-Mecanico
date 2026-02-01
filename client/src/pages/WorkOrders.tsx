@@ -11,6 +11,7 @@ import {
 import { useVehicles } from "@/hooks/use-vehicles";
 import { useProducts } from "@/hooks/use-products";
 import { useCategories } from "@/hooks/use-categories";
+import { useAuth } from "@/hooks/use-auth";
 import { ProductSearchDialog } from "@/components/products/ProductSearchDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +54,7 @@ export default function WorkOrders() {
   const { mutate: deleteWorkOrder } = useDeleteWorkOrder();
   const { data: vehicles = [] } = useVehicles();
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -97,19 +99,8 @@ export default function WorkOrders() {
     });
   }, [ordersWithVehicleRef, search, statusFilter]);
 
-  const handleDelete = (wo: WorkOrder) => {
-    if (confirm(`¿Estás seguro de eliminar la orden #${wo.numero_orden_papel}?`)) {
-      deleteWorkOrder(wo.id, {
-        onSuccess: () => toast({ title: "Orden eliminada realizada" }),
-        onError: () => toast({ title: "Error al eliminar", variant: "destructive" })
-      });
-    }
-  };
-
   const columns = useMemo(() => createColumns(
-    (wo) => setSelectedOrder(wo),
-    (wo) => alert("Editar no implementado"),
-    (wo) => handleDelete(wo)
+    (wo) => setSelectedOrder(wo)
   ), []);
 
   const table = useReactTable({
@@ -136,7 +127,7 @@ export default function WorkOrders() {
       <PageHeader
         title="Órdenes de Trabajo"
         description="Gestione las órdenes de trabajo, seguimiento y facturación."
-        action={<CreateWorkOrderDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />}
+        action={isAdmin ? <CreateWorkOrderDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} /> : undefined}
       />
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -263,16 +254,19 @@ export default function WorkOrders() {
           {selectedOrder && (
             <>
               <SheetHeader className="pb-4 border-b">
-                <SheetTitle className="flex items-center justify-between">
-                  <span>Orden de Trabajo #{selectedOrder.numero_orden_papel}</span>
+                <div className="flex flex-col gap-2">
+                  <SheetTitle className="text-lg font-bold text-slate-900">
+                    Orden de Trabajo #{selectedOrder.numero_orden_papel}
+                  </SheetTitle>
                   <Badge className={cn(
+                    "w-fit",
                     selectedOrder.estado === "FINALIZADA" && "bg-emerald-500",
                     selectedOrder.estado === "EN_PROCESO" && "bg-amber-500",
                     selectedOrder.estado === "CANCELADA" && "bg-red-500"
                   )}>
                     {selectedOrder.estado}
                   </Badge>
-                </SheetTitle>
+                </div>
               </SheetHeader>
 
               <div className="space-y-6 pt-6">
@@ -281,19 +275,19 @@ export default function WorkOrders() {
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold text-slate-700">Información General</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Fecha de Ingreso:</span>
-                      <span className="font-medium">{new Date(selectedOrder.fecha_ingreso).toLocaleDateString('es-CL')}</span>
+                  <CardContent className="space-y-1.5 text-sm">
+                    <div className="flex gap-2">
+                      <span className="text-slate-600 min-w-[130px]">Fecha de Ingreso:</span>
+                      <span className="font-medium text-slate-900">{new Date(selectedOrder.fecha_ingreso).toLocaleDateString('es-CL')}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Realizado por:</span>
-                      <span className="font-medium">{selectedOrder.realizado_por}</span>
+                    <div className="flex gap-2">
+                      <span className="text-slate-600 min-w-[130px]">Realizado por:</span>
+                      <span className="font-medium text-slate-900">{selectedOrder.realizado_por}</span>
                     </div>
                     {selectedOrder.revisado_por && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Revisado por:</span>
-                        <span className="font-medium">{selectedOrder.revisado_por}</span>
+                      <div className="flex gap-2">
+                        <span className="text-slate-600 min-w-[130px]">Revisado por:</span>
+                        <span className="font-medium text-slate-900">{selectedOrder.revisado_por}</span>
                       </div>
                     )}
                   </CardContent>
@@ -306,21 +300,21 @@ export default function WorkOrders() {
                       <User className="w-4 h-4" /> Cliente
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Nombre:</span>
-                      <span className="font-medium">{selectedOrder.cliente.nombre}</span>
+                  <CardContent className="space-y-1.5 text-sm">
+                    <div className="flex gap-2">
+                      <span className="text-slate-600 min-w-[80px]">Nombre:</span>
+                      <span className="font-medium text-slate-900">{selectedOrder.cliente.nombre}</span>
                     </div>
                     {selectedOrder.cliente.rut && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">RUT:</span>
-                        <span className="font-medium font-mono">{selectedOrder.cliente.rut}</span>
+                      <div className="flex gap-2">
+                        <span className="text-slate-600 min-w-[80px]">RUT:</span>
+                        <span className="font-medium font-mono text-slate-900">{selectedOrder.cliente.rut}</span>
                       </div>
                     )}
                     {selectedOrder.cliente.telefono && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Teléfono:</span>
-                        <span className="font-medium font-mono">{selectedOrder.cliente.telefono}</span>
+                      <div className="flex gap-2">
+                        <span className="text-slate-600 min-w-[80px]">Teléfono:</span>
+                        <span className="font-medium font-mono text-slate-900">{selectedOrder.cliente.telefono}</span>
                       </div>
                     )}
                   </CardContent>
@@ -333,27 +327,27 @@ export default function WorkOrders() {
                       <Car className="w-4 h-4" /> Vehículo
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Patente:</span>
-                      <span className="font-bold font-mono">{selectedOrder.vehiculo?.patente || selectedOrder.patente_vehiculo}</span>
+                  <CardContent className="space-y-1.5 text-sm">
+                    <div className="flex gap-2">
+                      <span className="text-slate-600 min-w-[90px]">Patente:</span>
+                      <span className="font-bold font-mono text-slate-900">{selectedOrder.vehiculo?.patente || selectedOrder.patente_vehiculo}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Marca:</span>
-                      <span className={`font-medium uppercase ${selectedOrder.vehiculo?.marca === "SIN MARCA" ? "text-slate-400 italic" : ""}`}>
+                    <div className="flex gap-2">
+                      <span className="text-slate-600 min-w-[90px]">Marca:</span>
+                      <span className={`font-medium uppercase ${selectedOrder.vehiculo?.marca === "SIN MARCA" ? "text-slate-400 italic" : "text-slate-900"}`}>
                         {selectedOrder.vehiculo?.marca || "Sin Marca"}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Modelo:</span>
-                      <span className={`font-medium uppercase ${selectedOrder.vehiculo?.modelo === "SIN MODELO" ? "text-slate-400 italic" : ""}`}>
+                    <div className="flex gap-2">
+                      <span className="text-slate-600 min-w-[90px]">Modelo:</span>
+                      <span className={`font-medium uppercase ${selectedOrder.vehiculo?.modelo === "SIN MODELO" ? "text-slate-400 italic" : "text-slate-900"}`}>
                         {selectedOrder.vehiculo?.modelo || "Sin Modelo"}
                       </span>
                     </div>
                     {selectedOrder.vehiculo?.kilometraje && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Kilometraje:</span>
-                        <span className="font-medium">{selectedOrder.vehiculo.kilometraje.toLocaleString('es-CL')} km</span>
+                      <div className="flex gap-2">
+                        <span className="text-slate-600 min-w-[90px]">Kilometraje:</span>
+                        <span className="font-medium text-slate-900">{selectedOrder.vehiculo.kilometraje.toLocaleString('es-CL')} km</span>
                       </div>
                     )}
                   </CardContent>
@@ -553,8 +547,8 @@ function CreateWorkOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         rut: data.cliente_rut.replace(/\./g, "").replace(/-/g, "").toUpperCase().trim(),
         // Solo enviar email si tiene contenido válido
         ...(data.cliente_email.trim() && { email: data.cliente_email.trim() }),
-        // Solo enviar teléfono si tiene contenido válido (más que +56)
-        ...(data.cliente_telefono.replace(/\s/g, "").replace(/\+/g, "").trim() && { telefono: data.cliente_telefono.replace(/\s/g, "").replace(/\+/g, "").trim() })
+        // Solo enviar teléfono si tiene contenido válido (concatenar +56 9 con los 8 dígitos)
+        ...(data.cliente_telefono.trim() && { telefono: `56 9${data.cliente_telefono.trim()}` })
       },
       vehiculo: { 
         patente: data.vehiculo_patente.replace(/-/g, "").toUpperCase().trim(),
@@ -648,13 +642,21 @@ function CreateWorkOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                       />
                     )} />
                     <FormField control={form.control} name="cliente_telefono" render={({ field }) => (
-                      <Input 
-                        placeholder="+56912345678" 
-                        className="flex-1" 
-                        {...field}
-                        maxLength={12}
-                        onChange={e => field.onChange(formatPhone(e.target.value))} 
-                      />
+                      <div className="relative flex-1">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium pointer-events-none select-none">
+                          +56 9
+                        </div>
+                        <Input 
+                          placeholder="12345678" 
+                          className="pl-16 font-mono" 
+                          {...field}
+                          maxLength={8}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/[^0-9]/g, "");
+                            field.onChange(value);
+                          }}
+                        />
+                      </div>
                     )} />
                   </div>
                   <FormField control={form.control} name="cliente_email" render={({ field }) => (
@@ -740,11 +742,15 @@ function CreateWorkOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                           <div className="relative w-36">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
                             <Input 
-                              type="number" 
+                              type="text" 
                               placeholder="Precio" 
                               className="pl-7 text-right font-bold text-primary" 
-                              value={services[serviceName].precio || ""} 
-                              onChange={e => setServices(p => ({ ...p, [serviceName]: { ...p[serviceName], precio: parseInt(e.target.value) || 0 } }))} 
+                              value={services[serviceName].precio ? services[serviceName].precio.toLocaleString('es-CL') : ""} 
+                              onChange={e => {
+                                const rawValue = e.target.value.replace(/\D/g, "");
+                                const numValue = parseInt(rawValue) || 0;
+                                setServices(p => ({ ...p, [serviceName]: { ...p[serviceName], precio: numValue } }));
+                              }} 
                             />
                           </div>
                         )}

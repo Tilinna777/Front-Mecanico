@@ -307,17 +307,20 @@ export function AddProductDialog({ open, onOpenChange, onProductCreated, fromPur
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="stock_actual"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs font-bold uppercase text-slate-500">Stock Inicial</FormLabel>
-                      <FormControl><Input {...field} type="number" min="0" className="bg-white" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Solo mostrar Stock Inicial si NO viene desde Compras */}
+                {!fromPurchases && (
+                  <FormField
+                    control={form.control}
+                    name="stock_actual"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-bold uppercase text-slate-500">Stock Inicial</FormLabel>
+                        <FormControl><Input {...field} type="number" min="0" className="bg-white" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}

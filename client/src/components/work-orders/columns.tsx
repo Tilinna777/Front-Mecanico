@@ -1,21 +1,11 @@
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { MoreHorizontal, Eye, Trash2, Edit, Car, ArrowUpDown } from "lucide-react"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Eye, Car, ArrowUpDown } from "lucide-react"
 import { WorkOrder } from "@/hooks/use-work-orders"
 
 export const createColumns = (
-    onView: (wo: WorkOrder) => void,
-    onEdit: (wo: WorkOrder) => void,
-    onDelete: (wo: WorkOrder) => void
+    onView: (wo: WorkOrder) => void
 ): ColumnDef<WorkOrder>[] => [
         {
             accessorKey: "numero_orden_papel",
@@ -152,27 +142,15 @@ export const createColumns = (
                 const wo = row.original
 
                 return (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Abrir menú</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => onView(wo)}>
-                                <Eye className="mr-2 h-4 w-4" /> Ver detalle
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onEdit(wo)}>
-                                <Edit className="mr-2 h-4 w-4" /> Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => onDelete(wo)} className="text-red-600 focus:text-red-600 focus:bg-red-50">
-                                <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => onView(wo)}
+                        className="h-8 px-3 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    >
+                        <Eye className="mr-2 h-4 w-4" />
+                        Ver detalle
+                    </Button>
                 )
             },
         },
