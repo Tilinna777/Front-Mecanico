@@ -326,30 +326,7 @@ export default function Reportes() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle className="font-bold">⚠️ Alerta de Stock Bajo</AlertTitle>
           <AlertDescription>
-            <p className="mb-3">{lowStockProducts.length} producto(s) requieren reposición:</p>
-            <div className="flex flex-wrap gap-2">
-              {lowStockProducts.slice(0, 6).map((product) => (
-                <Badge key={product.id} variant="destructive" className="font-mono text-xs py-1 px-2">
-                  {product.sku} • {product.nombre} ({product.stock_actual}/{product.stock_minimo})
-                </Badge>
-              ))}
-              {lowStockProducts.length > 6 && (
-                <Badge variant="outline" className="text-red-700 border-red-300">
-                  +{lowStockProducts.length - 6} más
-                </Badge>
-              )}
-            </div>
-            {isAdmin && (
-              <Button
-                variant="destructive"
-                size="sm"
-                className="mt-3"
-                onClick={() => setLocation('/purchases/create')}
-              >
-                Registrar Compra
-                <ArrowRight className="w-4 h-4 ml-1" />
-              </Button>
-            )}
+            <p>{lowStockProducts.length} producto(s) requieren reposición</p>
           </AlertDescription>
         </Alert>
       )}
