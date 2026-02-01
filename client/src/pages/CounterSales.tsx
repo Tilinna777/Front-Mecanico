@@ -383,6 +383,7 @@ function CreateCounterSaleDialog({ open, onOpenChange }: { open: boolean; onOpen
   ]);
   const { toast } = useToast();
   const { createSale, isCreating } = useCounterSales();
+  const { data: allProducts = [] } = useProducts(); // Para validación de stock
 
   const addItem = () => {
     setItems([...items, { sku: "", cantidad: 1, precio_venta: 0 }]);
@@ -422,8 +423,10 @@ function CreateCounterSaleDialog({ open, onOpenChange }: { open: boolean; onOpen
     // 1. Validar Vendedor en Ventas
     if (tipoMovimiento === "VENTA" && !vendedor.trim()) {
       toast({
-        title: "Falta información",
+        title: "⚠️ Falta información",
         description: "Debes ingresar el nombre del vendedor.",
+        variant: "destructive",
+        className: "bg-red-600 border-red-700 text-white [&>div]:text-white"
       });
       return;
     }
@@ -432,12 +435,56 @@ function CreateCounterSaleDialog({ open, onOpenChange }: { open: boolean; onOpen
     const itemsInvalidos = items.some(item => !item.sku || item.sku.trim() === "");
     if (itemsInvalidos) {
       toast({
-        title: "Items incompletos",
+        title: "⚠️ Items incompletos",
         description: "Selecciona un producto para cada línea.",
+        variant: "destructive",
+        className: "bg-red-600 border-red-700 text-white [&>div]:text-white"
       });
       return;
     }
 
+    // 3. VALIDACIÓN DE STOCK PRE-SUBMIT (CRITICAL)
+    const stockErrors: string[] = [];
+
+    for (const item of items) {
+      const product = allProducts.find(p => p.sku === item.sku);
+      if (!product) {
+        stockErrors.push(`❌ Producto ${item.sku} no encontrado en el inventario.`);
+        continue;
+      }
+
+      if (product.stock_actual < item.cantidad) {
+        stockErrors.push(
+          `❌ ${product.nombre} (${product.sku}): solicitado ${item.cantidad}, disponible ${product.stock_actual}`
+        );
+      }
+    }
+
+    // Si hay errores de stock, abortar y mostrar alerta crítica
+    if (stockErrors.length > 0) {
+      toast({
+        title: "⚠️ STOCK INSUFICIENTE",
+        description: (
+          <div className="space-y-2 mt-2 text-white">
+            <p className="font-bold text-white">No se puede procesar el movimiento:</p>
+            <ul className="list-none space-y-1 text-sm">
+              {stockErrors.map((error, idx) => (
+                <li key={idx} className="text-white font-medium">{error}</li>
+              ))}
+            </ul>
+            <p className="text-xs text-white/90 mt-3 pt-2 border-t border-white/30">
+              Por favor, ajusta las cantidades antes de continuar.
+            </p>
+          </div>
+        ),
+        variant: "destructive",
+        duration: 10000,
+        className: "bg-red-600 border-red-700 text-white [&>div]:text-white"
+      });
+      return; // ABORTAR - Estado del formulario NO se limpia
+    }
+
+    // 4. Intentar Crear (Solo si pasó todas las validaciones)
     try {
       await createSale({
         tipo_movimiento: tipoMovimiento,
@@ -451,22 +498,27 @@ function CreateCounterSaleDialog({ open, onOpenChange }: { open: boolean; onOpen
       });
 
       toast({
-        title: "Movimiento registrado",
-        description: `Se ha registrado exitosamente.`,
+        title: "✅ Movimiento registrado",
+        description: `${tipoMovimiento === "VENTA" ? "Venta" : tipoMovimiento === "PERDIDA" ? "Pérdida" : "Uso Interno"} procesado exitosamente.`,
+        className: "bg-emerald-50 text-emerald-900 border-emerald-200"
       });
 
-      // Reset form
+      // Reset form SOLO después del éxito
       setTipoMovimiento("VENTA");
       setVendedor("");
       setComentario("");
       setItems([{ sku: "", cantidad: 1, precio_venta: 0 }]);
       onOpenChange(false);
     } catch (error: any) {
+      // Error del Backend (400/500) - Preservar estado
       toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
+        title: "❌ Error al procesar",
+        description: error.message || "Ocurrió un problema al registrar el movimiento. Por favor, verifica los datos e intenta nuevamente.",
+        variant: "destructive",
+        duration: 8000,
+        className: "bg-red-600 border-red-700 text-white [&>div]:text-white"
       });
+      // NO cerrar modal, NO limpiar formulario
     }
   };
 
@@ -481,9 +533,11 @@ function CreateCounterSaleDialog({ open, onOpenChange }: { open: boolean; onOpen
       <DialogContent className="max-w-[85vw] w-full h-[80vh] p-0 gap-0 overflow-hidden flex flex-col bg-slate-50">
         {/* Header */}
         <div className="bg-white border-b px-6 py-4 flex items-center justify-between shrink-0">
-          <div>
-            <DialogTitle className="text-xl font-bold text-slate-900">Nueva Venta / Movimiento</DialogTitle>
-            <DialogDescription>Genera una nueva transacción de inventario</DialogDescription>
+          <div className="flex items-center gap-4">
+            <div>
+              <DialogTitle className="text-xl font-bold text-slate-900">Nueva Venta / Movimiento</DialogTitle>
+              <DialogDescription className="text-sm">Registra transacciones de inventario en tiempo real</DialogDescription>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
@@ -616,22 +670,27 @@ function CreateCounterSaleDialog({ open, onOpenChange }: { open: boolean; onOpen
                   <div className="space-y-4">
                     {tipoMovimiento === "VENTA" && (
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Vendedor</label>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Vendedor *</label>
                         <Input
                           placeholder="Nombre vendedor..."
                           value={vendedor}
-                          onChange={(e) => setVendedor(e.target.value)}
-                          className="bg-white border-slate-200 h-10"
+                          onChange={(e) => setVendedor(e.target.value.toUpperCase())}
+                          className="bg-white border-slate-200 h-10 uppercase placeholder:normal-case"
                         />
+                        <p className="text-[10px] text-slate-400 italic">Se guardará en mayúsculas automáticamente</p>
                       </div>
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Comentarios</label>
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex justify-between items-center">
+                        <span>Comentarios</span>
+                        <span className="text-[10px] text-slate-400 normal-case font-normal">{comentario.length}/100</span>
+                      </label>
                       <Input
                         placeholder="Opcional..."
                         value={comentario}
                         onChange={(e) => setComentario(e.target.value)}
+                        maxLength={100}
                         className="bg-white border-slate-200 h-10"
                       />
                     </div>
