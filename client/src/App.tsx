@@ -9,7 +9,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 
-// Lazy loading de páginas para reducir bundle inicial
 const NotFound = lazy(() => import("@/pages/not-found"));
 const Reportes = lazy(() => import("@/pages/Reportes"));
 const Inventory = lazy(() => import("@/pages/Inventory"));

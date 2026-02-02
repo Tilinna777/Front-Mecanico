@@ -1,5 +1,4 @@
 import { Link, useLocation } from "wouter";
-// Agregamos 'Users' y 'TrendingUp' a los imports de lucide-react
 import { Package, ShoppingCart, ClipboardList, Wrench, Menu, LogOut, User, LayoutDashboard, Users, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -8,7 +7,6 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Badge } from "./ui/badge";
 
-// Links con roles permitidos
 const allLinks = [
   { href: "/reportes", label: "Reportes", icon: LayoutDashboard, roles: ["ADMIN"] },
   { href: "/inventory", label: "Inventario", icon: Package, roles: ["ADMIN", "WORKER"] },
